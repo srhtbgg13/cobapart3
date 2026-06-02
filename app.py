@@ -26,12 +26,14 @@ CORS(app, origins=[
      supports_credentials=False)
 
 # ── KONFIGURASI MySQL ─────────────────────────────────────────────
+import os
+
 MYSQL_CONFIG = {
-    "host":     "127.0.0.1",
-    "port":     3306,
-    "user":     "root",       # ← sesuaikan dengan user MySQL kamu
-    "password": "Kum@2310501015",           # ← sesuaikan dengan password MySQL kamu
-    "database": "indocement",
+    "host":     os.environ.get("MYSQLHOST", "127.0.0.1"),
+    "port":     int(os.environ.get("MYSQLPORT", 3306)),
+    "user":     os.environ.get("MYSQLUSER", "root"),
+    "password": os.environ.get("MYSQLPASSWORD", ""),
+    "database": os.environ.get("MYSQLDATABASE", "railway"),
     "cursorclass": pymysql.cursors.DictCursor,
     "charset":  "utf8mb4",
 }
@@ -1447,4 +1449,5 @@ if __name__ == "__main__":
         pass  # Kolom sudah ada, abaikan error
     conn.close()
     print("ok")
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+app.run(debug=False, host="0.0.0.0", port=port)
