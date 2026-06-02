@@ -833,7 +833,7 @@ def kpi_kfi():
 
 
 if __name__ == "__main__":
-    conn = get_db()
+
     with conn.cursor() as cur:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS notifikasi (
