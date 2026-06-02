@@ -1,39 +1,27 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pymysql
 import pymysql.cursors
-from datetime import datetime, timedelta
-import bcrypt
-import jwt
-import functools
+from datetime import datetime
+import os
 
-app = Flask(__name__, static_folder='.', static_url_path='')
-
-@app.route('/')
-@app.route('/index.html')
-def serve_index():
-    return send_from_directory('.', 'index.html')
-
-
-JWT_SECRET = "indocement_jwt_secret_ganti_ini_di_production"
-JWT_EXPIRY_DAYS = 7
+app = Flask(__name__)
 CORS(app, origins=[
         "http://127.0.0.1:5500", "http://localhost:5500",
         "http://127.0.0.1:5501", "http://localhost:5501",
         "http://127.0.0.1:5000", "http://localhost:5000",
         "http://127.0.0.1:8080", "http://localhost:8080",
+        "https://srhtbgg13.github.io",
     ],
      supports_credentials=False)
 
 # ── KONFIGURASI MySQL ─────────────────────────────────────────────
-import os
-
 MYSQL_CONFIG = {
-    "host":     os.environ.get("MYSQLHOST", "127.0.0.1"),
-    "port":     int(os.environ.get("MYSQLPORT", 3306)),
-    "user":     os.environ.get("MYSQLUSER", "root"),
-    "password": os.environ.get("MYSQLPASSWORD", ""),
-    "database": os.environ.get("MYSQLDATABASE", "railway"),
+    "host":     "127.0.0.1",
+    "port":     3306,
+    "user":     "root",       # ← sesuaikan dengan user MySQL kamu
+    "password": "=",           # ← sesuaikan dengan password MySQL kamu
+    "database": "indocement",
     "cursorclass": pymysql.cursors.DictCursor,
     "charset":  "utf8mb4",
 }
@@ -130,109 +118,18 @@ DELETE_FIELD_LABELS = {
 }
 
 
-def generate_token(user_id, username, role):
-    """Buat JWT token yang berlaku JWT_EXPIRY_DAYS hari."""
-    payload = {
-        "user_id": user_id,
-        "username": username,
-        "role": role,
-        "exp": datetime.utcnow() + timedelta(days=JWT_EXPIRY_DAYS)
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
-
-
-def decode_token(token):
-    """Decode JWT token, return payload atau None kalau tidak valid."""
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        return None
-
-
-def require_auth(f):
-    """Decorator: endpoint wajib login (kirim Authorization: Bearer <token>)."""
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Token tidak ditemukan", "message": "Login terlebih dahulu."}), 401
-        token = auth_header.split(" ", 1)[1]
-        payload = decode_token(token)
-        if not payload:
-            return jsonify({"error": "Token tidak valid atau sudah kadaluarsa", "message": "Silakan login ulang."}), 401
-        request.current_user = payload
-        return f(*args, **kwargs)
-    return wrapper
-
-
-def require_admin(f):
-    """Decorator: endpoint hanya untuk role admin."""
-    @functools.wraps(f)
-    @require_auth
-    def wrapper(*args, **kwargs):
-        if request.current_user.get("role") != "admin":
-            return jsonify({"error": "Akses ditolak", "message": "Hanya admin yang dapat mengakses endpoint ini."}), 403
-        return f(*args, **kwargs)
-    return wrapper
-
-
 def get_db():
     """Buka koneksi MySQL baru."""
     conn = pymysql.connect(**MYSQL_CONFIG)
     return conn
 
 
-def tambah_notifikasi(conn, pesan, tipe="success", user_id=None):
-    """
-    Simpan notifikasi ke tabel notifikasi.
-    user_id = None  → notifikasi global (tampil untuk semua / admin)
-    user_id = <id>  → notifikasi personal (tampil hanya untuk user tsb)
-    """
+def tambah_notifikasi(conn, pesan, tipe="success"):
+    """Simpan notifikasi ke tabel notifikasi di MySQL."""
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO notifikasi (pesan, tipe, user_id) VALUES (%s, %s, %s)",
-            (pesan, tipe, user_id)
-        )
-
-
-def tambah_audit_log(conn, aksi, tabel_target, record_id=None,
-                     data_lama=None, data_baru=None, user_id=None, username=None):
-    """
-    Simpan jejak aktivitas ke tabel audit_log.
-    Dipanggil setelah setiap operasi INSERT / UPDATE / DELETE pada data keuangan,
-    serta saat register dan hapus user.
-
-    aksi          : string pendek, mis. 'INSERT', 'UPDATE', 'DELETE', 'REGISTER', 'DELETE_USER'
-    tabel_target  : nama tabel yang terpengaruh, mis. 'indocement', 'users'
-    record_id     : PK baris yang diubah (opsional)
-    data_lama     : dict snapshot sebelum perubahan (opsional, untuk UPDATE/DELETE)
-    data_baru     : dict snapshot sesudah perubahan (opsional, untuk INSERT/UPDATE)
-    user_id       : id user yang melakukan aksi (ambil dari JWT bila tersedia)
-    username      : username untuk referensi cepat tanpa JOIN
-    """
-    import json as _json
-    # Ambil user dari request context bila tidak dikirim eksplisit
-    if user_id is None:
-        try:
-            user_id  = request.current_user.get("user_id")
-            username = request.current_user.get("username")
-        except AttributeError:
-            pass
-
-    with conn.cursor() as cur:
-        cur.execute(
-            """INSERT INTO audit_log
-               (user_id, username, aksi, tabel_target, record_id, data_lama, data_baru)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            (
-                user_id,
-                username,
-                aksi,
-                tabel_target,
-                record_id,
-                _json.dumps(data_lama,  ensure_ascii=False) if data_lama  is not None else None,
-                _json.dumps(data_baru,  ensure_ascii=False) if data_baru  is not None else None,
-            )
+            "INSERT INTO notifikasi (pesan, tipe) VALUES (%s, %s)",
+            (pesan, tipe)
         )
 
 
@@ -302,230 +199,8 @@ def fmt_rupiah(val_juta):
         return f"{v / 1_000:.2f} M"
 
 
-# ── ENDPOINT: REGISTER ───────────────────────────────────────────
-@app.route("/api/register", methods=["POST"])
-def register():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Data tidak boleh kosong"}), 400
-
-    username   = (data.get("username") or "").strip()
-    password   = data.get("password") or ""
-    nama_depan = (data.get("nama_depan") or "").strip()
-    nama_belakang = (data.get("nama_belakang") or "").strip()
-    email      = (data.get("email") or "").strip()
-    divisi     = (data.get("divisi") or "").strip()
-    role       = data.get("role") or "user"
-
-    if not username:
-        return jsonify({"error": "Username wajib diisi"}), 400
-    if len(username) < 3:
-        return jsonify({"error": "Username minimal 3 karakter"}), 400
-    if not username.replace("_", "").isalnum():
-        return jsonify({"error": "Username hanya boleh huruf, angka, dan underscore"}), 400
-    if len(password) < 6:
-        return jsonify({"error": "Password minimal 6 karakter"}), 400
-    if not nama_depan:
-        return jsonify({"error": "Nama depan wajib diisi"}), 400
-    if role not in ("admin", "user"):
-        role = "user"
-
-    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    nama_lengkap  = f"{nama_depan} {nama_belakang}".strip()
-
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT id FROM users WHERE username = %s", (username,))
-            if cur.fetchone():
-                return jsonify({"error": "Username sudah digunakan. Pilih username lain."}), 409
-            cur.execute(
-                """INSERT INTO users (username, password_hash, nama_lengkap, email, divisi, role)
-                   VALUES (%s, %s, %s, %s, %s, %s)""",
-                (username, password_hash, nama_lengkap, email or None, divisi or None, role)
-            )
-            user_id = cur.lastrowid
-        tambah_notifikasi(conn, f"Selamat datang, {nama_lengkap}! Akun Anda sebagai {role} berhasil dibuat.", tipe="info", user_id=user_id)
-        tambah_audit_log(conn, aksi="REGISTER", tabel_target="users",
-                         record_id=user_id,
-                         data_baru={"username": username, "role": role,
-                                    "nama_lengkap": nama_lengkap, "divisi": divisi or None},
-                         user_id=user_id, username=username)
-        conn.commit()
-        token = generate_token(user_id, username, role)
-        return jsonify({
-            "status": "ok",
-            "pesan": f"Akun '{username}' berhasil dibuat.",
-            "token": token,
-            "user": {"id": user_id, "username": username, "nama": nama_lengkap, "role": role}
-        }), 201
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-# ── ENDPOINT: LOGIN ──────────────────────────────────────────────
-@app.route("/api/login", methods=["POST"])
-def login():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Data tidak boleh kosong"}), 400
-
-    username = (data.get("username") or "").strip()
-    password = data.get("password") or ""
-
-    if not username or not password:
-        return jsonify({"error": "Username dan password wajib diisi"}), 400
-
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, username, password_hash, nama_lengkap, role, divisi FROM users WHERE username = %s",
-                (username,)
-            )
-            user = cur.fetchone()
-
-        if not user:
-            return jsonify({"error": "Username atau password salah"}), 401
-        if not bcrypt.checkpw(password.encode("utf-8"), user["password_hash"].encode("utf-8")):
-            return jsonify({"error": "Username atau password salah"}), 401
-
-        # Catat waktu login terakhir
-        now = datetime.utcnow()
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE users SET last_login = %s WHERE id = %s",
-                (now, user["id"])
-            )
-        # Catat aktivitas login ke audit log
-        tambah_audit_log(conn, aksi="LOGIN", tabel_target="users",
-                         record_id=user["id"],
-                         data_baru={
-                             "role":      user["role"],
-                             "ip":        request.remote_addr,
-                             "waktu":     now.strftime("%d %b %Y, %H:%M:%S"),
-                         },
-                         user_id=user["id"], username=user["username"])
-        conn.commit()
-
-        token = generate_token(user["id"], user["username"], user["role"])
-        initials = "".join(w[0].upper() for w in (user["nama_lengkap"] or username).split()[:2]) or username[:2].upper()
-        return jsonify({
-            "status": "ok",
-            "token": token,
-            "user": {
-                "id":         user["id"],
-                "username":   user["username"],
-                "nama":       user["nama_lengkap"] or user["username"],
-                "role":       user["role"],
-                "divisi":     user["divisi"] or "",
-                "initials":   initials,
-                "last_login": now.strftime("%d %b %Y, %H:%M")
-            }
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-# ── ENDPOINT: LOGOUT ─────────────────────────────────────────────
-@app.route("/api/logout", methods=["POST"])
-@require_auth
-def logout():
-    """Catat aktivitas logout ke audit log. Token dihapus di sisi frontend."""
-    user = request.current_user
-    conn = get_db()
-    try:
-        tambah_audit_log(conn, aksi="LOGOUT", tabel_target="users",
-                         record_id=user.get("user_id"),
-                         data_baru={
-                             "ip":    request.remote_addr,
-                             "waktu": datetime.utcnow().strftime("%d %b %Y, %H:%M:%S"),
-                         },
-                         user_id=user.get("user_id"), username=user.get("username"))
-        conn.commit()
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-# ── ENDPOINT: VERIFY TOKEN ───────────────────────────────────────
-@app.route("/api/auth/me", methods=["GET"])
-@require_auth
-def auth_me():
-    """Cek token masih valid, kembalikan info user."""
-    payload = request.current_user
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, username, nama_lengkap, role, divisi FROM users WHERE id = %s",
-                (payload["user_id"],)
-            )
-            user = cur.fetchone()
-        if not user:
-            return jsonify({"error": "User tidak ditemukan"}), 404
-        initials = "".join(w[0].upper() for w in (user["nama_lengkap"] or user["username"]).split()[:2])
-        return jsonify({
-            "status": "ok",
-            "user": {
-                "id":       user["id"],
-                "username": user["username"],
-                "nama":     user["nama_lengkap"] or user["username"],
-                "role":     user["role"],
-                "divisi":   user["divisi"] or "",
-                "initials": initials
-            }
-        })
-    finally:
-        conn.close()
-
-
-# ── ENDPOINT: GANTI PASSWORD ────────────────────────────────────
-@app.route("/api/auth/change-password", methods=["POST"])
-@require_auth
-def change_password():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Data tidak boleh kosong"}), 400
-    old_password = data.get("old_password") or ""
-    new_password = data.get("new_password") or ""
-    if not old_password:
-        return jsonify({"error": "Password saat ini wajib diisi"}), 400
-    if len(new_password) < 6:
-        return jsonify({"error": "Password baru minimal 6 karakter"}), 400
-
-    user_id = request.current_user["user_id"]
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT password_hash FROM users WHERE id = %s", (user_id,))
-            row = cur.fetchone()
-        if not row:
-            return jsonify({"error": "User tidak ditemukan"}), 404
-        if not bcrypt.checkpw(old_password.encode("utf-8"), row["password_hash"].encode("utf-8")):
-            return jsonify({"error": "Password saat ini tidak sesuai"}), 401
-        new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-        with conn.cursor() as cur:
-            cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (new_hash, user_id))
-        conn.commit()
-        return jsonify({"status": "ok", "pesan": "Password berhasil diperbarui."})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
-
-
 # ── ENDPOINT: TAMBAH DATA KEUANGAN ───────────────────────────────
 @app.route("/api/keuangan", methods=["POST"])
-@require_admin
 def tambah_keuangan():
     data = request.get_json()
     if not data:
@@ -595,15 +270,6 @@ def tambah_keuangan():
             }), 400
 
         if exists:
-            # UPDATE — ambil data lama dulu untuk audit
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT * FROM indocement WHERE `year`=%s AND `quarter`=%s",
-                    (tahun, kuartal)
-                )
-                baris_lama = cur.fetchone()
-            record_id_audit = None  # tabel indocement tidak punya kolom id
-
             # UPDATE — hanya timpa kolom yang dikirim (tidak None)
             set_parts = []
             set_vals  = []
@@ -623,13 +289,6 @@ def tambah_keuangan():
                     f"WHERE `year`=%s AND `quarter`=%s",
                     set_vals
                 )
-            # Catat perubahan: hanya field yang benar-benar dikirim
-            data_baru_audit = {k: v for k, v in payload_map.items() if v is not None}
-            data_lama_audit = {k: baris_lama.get(k) for k in data_baru_audit} if baris_lama else None
-            tambah_audit_log(conn, aksi="UPDATE", tabel_target="indocement",
-                             record_id=record_id_audit,
-                             data_lama=data_lama_audit,
-                             data_baru=data_baru_audit)
             aksi = "diperbarui"
         else:
             # INSERT baru — sertakan kolom yang tidak None saja
@@ -646,18 +305,12 @@ def tambah_keuangan():
                     f"VALUES ({placeholders})",
                     vals_to_insert
                 )
-            data_baru_audit = {k: v for k, v in payload_map.items() if v is not None}
-            data_baru_audit.update({"year": tahun, "quarter": kuartal})
-            tambah_audit_log(conn, aksi="INSERT", tabel_target="indocement",
-                             record_id=None,
-                             data_baru=data_baru_audit)
             aksi = "ditambahkan"
 
         tambah_notifikasi(
             conn,
-            f"Anda berhasil {'menambahkan' if aksi == 'ditambahkan' else 'memperbarui'} data keuangan {kuartal} {tahun}.",
-            tipe="success",
-            user_id=request.current_user.get("user_id")
+            f"Data keuangan {kuartal} {tahun} berhasil {aksi}",
+            tipe="success"
         )
         conn.commit()
         pesan = f"Data keuangan {kuartal} {tahun} berhasil {aksi}"
@@ -672,7 +325,6 @@ def tambah_keuangan():
 
 # ── ENDPOINT: HAPUS DATA (set field ke NULL) ─────────────────────
 @app.route("/api/data/field", methods=["DELETE"])
-@require_admin
 def hapus_field():
     """
     Hapus nilai satu field keuangan dengan meng-set kolom ke NULL.
@@ -718,14 +370,6 @@ def hapus_field():
 
     conn = get_db()
     try:
-        # Ambil snapshot data sebelum dihapus untuk audit
-        with conn.cursor() as cur:
-            cur.execute(
-                f"SELECT `year`, `quarter`, `{col_mysql}` FROM indocement {where}",
-                params or ()
-            )
-            baris_lama_list = cur.fetchall()
-
         with conn.cursor() as cur:
             cur.execute(
                 f"UPDATE indocement SET `{col_mysql}` = NULL {where}",
@@ -742,21 +386,10 @@ def hapus_field():
                 ),
             }), 404
 
-        # Catat audit log untuk setiap baris yang terpengaruh
-        for baris in baris_lama_list:
-            tambah_audit_log(
-                conn, aksi="DELETE_FIELD", tabel_target="indocement",
-                record_id=None,
-                data_lama={"field": col_mysql, "nilai": baris.get(col_mysql),
-                           "year": baris.get("year"), "quarter": baris.get("quarter")},
-                data_baru={"field": col_mysql, "nilai": None}
-            )
-
         tambah_notifikasi(
             conn,
-            f"Anda berhasil menghapus data {label} pada {periode}.",
+            f'{label} pada {periode} di-set ke NULL ({affected} baris terpengaruh)',
             tipe="warning",
-            user_id=request.current_user.get("user_id")
         )
         conn.commit()
 
@@ -777,147 +410,26 @@ def hapus_field():
         conn.close()
 
 
-# ── ENDPOINT: AUDIT LOG ─────────────────────────────────────────
-@app.route("/api/audit-log", methods=["GET"])
-@require_admin
-def get_audit_log():
-    """
-    Ambil daftar audit log. Hanya admin.
-    Query params opsional:
-      limit   (default 50, max 200)
-      offset  (default 0, untuk paginasi)
-      aksi    — filter jenis aksi: INSERT / UPDATE / DELETE_FIELD / REGISTER
-      user_id — filter per user
-    """
-    limit   = min(int(request.args.get("limit",  50)),  200)
-    offset  = int(request.args.get("offset", 0))
-    aksi    = request.args.get("aksi",    "").strip() or None
-    user_id = request.args.get("user_id", type=int)
-
-    where_parts, params = [], []
-    if aksi:
-        where_parts.append("al.aksi = %s");    params.append(aksi)
-    if user_id:
-        where_parts.append("al.user_id = %s"); params.append(user_id)
-    where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
-
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""SELECT al.id, al.user_id, al.username, al.aksi,
-                           al.tabel_target, al.record_id,
-                           al.data_lama, al.data_baru, al.dibuat_pada
-                    FROM audit_log al
-                    {where_sql}
-                    ORDER BY al.id DESC
-                    LIMIT %s OFFSET %s""",
-                (*params, limit, offset)
-            )
-            rows = cur.fetchall()
-            cur.execute(f"SELECT COUNT(*) AS n FROM audit_log al {where_sql}", params)
-            total = cur.fetchone()["n"]
-    finally:
-        conn.close()
-
-    import json as _json
-    # Parse JSON string → dict supaya response lebih bersih
-    for r in rows:
-        for col in ("data_lama", "data_baru"):
-            if r[col] and isinstance(r[col], str):
-                try:    r[col] = _json.loads(r[col])
-                except Exception: pass
-        if r["dibuat_pada"]:
-            r["dibuat_pada"] = r["dibuat_pada"].strftime("%d %b %Y, %H:%M:%S")
-
-    return jsonify({"total": total, "limit": limit, "offset": offset, "log": rows})
-
-
-@app.route("/api/audit-log/ringkasan", methods=["GET"])
-@require_admin
-def ringkasan_audit_log():
-    """
-    Ringkasan aktivitas: jumlah aksi per tipe dan 5 aktivitas terbaru.
-    Hanya admin.
-    """
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """SELECT aksi, COUNT(*) AS jumlah
-                   FROM audit_log
-                   GROUP BY aksi ORDER BY jumlah DESC"""
-            )
-            per_aksi = cur.fetchall()
-            cur.execute(
-                """SELECT al.id, al.username, al.aksi, al.tabel_target,
-                          al.record_id, al.dibuat_pada
-                   FROM audit_log al
-                   ORDER BY al.id DESC LIMIT 5"""
-            )
-            terbaru = cur.fetchall()
-    finally:
-        conn.close()
-
-    for r in terbaru:
-        if r["dibuat_pada"]:
-            r["dibuat_pada"] = r["dibuat_pada"].strftime("%d %b %Y, %H:%M:%S")
-
-    return jsonify({"per_aksi": per_aksi, "aktivitas_terbaru": terbaru})
-
-
 # ── ENDPOINT: NOTIFIKASI ─────────────────────────────────────────
 @app.route("/api/notifikasi", methods=["GET"])
-@require_auth
 def get_notifikasi():
-    """
-    Ambil notifikasi milik user yang sedang login.
-    Admin mendapat notifikasi global (user_id IS NULL) + notifikasi miliknya sendiri.
-    User biasa hanya mendapat notifikasi miliknya sendiri.
-    """
-    current = request.current_user
-    uid     = current.get("user_id")
-    role    = current.get("role")
-
     conn = get_db()
     try:
         with conn.cursor() as cur:
-            if role == "admin":
-                # Admin: notif global + notif personal miliknya
-                cur.execute(
-                    """SELECT * FROM notifikasi
-                       WHERE user_id IS NULL OR user_id = %s
-                       ORDER BY id DESC LIMIT 30""",
-                    (uid,)
+            # Pastikan tabel ada sebelum query
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS notifikasi (
+                    id           INT AUTO_INCREMENT PRIMARY KEY,
+                    pesan        TEXT NOT NULL,
+                    tipe         VARCHAR(20) DEFAULT 'info',
+                    sudah_dibaca TINYINT(1)  DEFAULT 0,
+                    dibuat_pada  DATETIME    DEFAULT CURRENT_TIMESTAMP
                 )
-                rows = cur.fetchall()
-                cur.execute(
-                    """SELECT COUNT(*) AS n FROM notifikasi
-                       WHERE sudah_dibaca = 0
-                         AND (user_id IS NULL OR user_id = %s)""",
-                    (uid,)
-                )
-            else:
-                # User biasa: hanya notif personal miliknya
-                cur.execute(
-                    """SELECT * FROM notifikasi
-                       WHERE user_id = %s
-                       ORDER BY id DESC LIMIT 30""",
-                    (uid,)
-                )
-                rows = cur.fetchall()
-                cur.execute(
-                    """SELECT COUNT(*) AS n FROM notifikasi
-                       WHERE sudah_dibaca = 0 AND user_id = %s""",
-                    (uid,)
-                )
+            """)
+            cur.execute("SELECT * FROM notifikasi ORDER BY id DESC LIMIT 20")
+            rows = cur.fetchall()
+            cur.execute("SELECT COUNT(*) AS n FROM notifikasi WHERE sudah_dibaca = 0")
             belum_dibaca = cur.fetchone()["n"]
-
-        # Format datetime agar JSON-serializable
-        for r in rows:
-            if r.get("dibuat_pada"):
-                r["dibuat_pada"] = r["dibuat_pada"].strftime("%d %b %Y, %H:%M")
-
         conn.commit()
         return jsonify({"belum_dibaca": belum_dibaca, "notifikasi": rows})
     except Exception as e:
@@ -927,76 +439,13 @@ def get_notifikasi():
 
 
 @app.route("/api/notifikasi/baca-semua", methods=["POST"])
-@require_auth
 def tandai_sudah_dibaca():
-    """Tandai semua notifikasi milik user ini sebagai sudah dibaca."""
-    current = request.current_user
-    uid     = current.get("user_id")
-    role    = current.get("role")
-
     conn = get_db()
     try:
         with conn.cursor() as cur:
-            if role == "admin":
-                cur.execute(
-                    "UPDATE notifikasi SET sudah_dibaca = 1 WHERE user_id IS NULL OR user_id = %s",
-                    (uid,)
-                )
-            else:
-                cur.execute(
-                    "UPDATE notifikasi SET sudah_dibaca = 1 WHERE user_id = %s",
-                    (uid,)
-                )
+            cur.execute("UPDATE notifikasi SET sudah_dibaca = 1")
         conn.commit()
         return jsonify({"status": "ok"})
-    finally:
-        conn.close()
-
-
-@app.route("/api/notifikasi/<int:notif_id>", methods=["DELETE"])
-@require_auth
-def hapus_notifikasi(notif_id):
-    """Hapus satu notifikasi. User hanya bisa hapus miliknya sendiri; admin bisa hapus semua."""
-    current = request.current_user
-    uid     = current.get("user_id")
-    role    = current.get("role")
-
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            if role == "admin":
-                cur.execute("DELETE FROM notifikasi WHERE id = %s", (notif_id,))
-            else:
-                cur.execute(
-                    "DELETE FROM notifikasi WHERE id = %s AND user_id = %s",
-                    (notif_id, uid)
-                )
-            affected = cur.rowcount
-        conn.commit()
-        if affected == 0:
-            return jsonify({"error": "Notifikasi tidak ditemukan atau bukan milik Anda"}), 404
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-@app.route("/api/notifikasi/hapus-semua", methods=["DELETE"])
-@require_admin
-def hapus_semua_notifikasi():
-    """Hapus seluruh notifikasi dari database. Hanya admin."""
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM notifikasi")
-            affected = cur.rowcount
-        conn.commit()
-        return jsonify({"status": "ok", "pesan": f"{affected} notifikasi berhasil dihapus."})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
 
@@ -1386,7 +835,6 @@ def kpi_kfi():
 if __name__ == "__main__":
     conn = get_db()
     with conn.cursor() as cur:
-        # Tabel notifikasi
         cur.execute("""
             CREATE TABLE IF NOT EXISTS notifikasi (
                 id           INT AUTO_INCREMENT PRIMARY KEY,
@@ -1397,7 +845,6 @@ if __name__ == "__main__":
                 dibuat_pada  DATETIME    DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # Tabel users
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id            INT AUTO_INCREMENT PRIMARY KEY,
@@ -1411,7 +858,6 @@ if __name__ == "__main__":
                 dibuat_pada   DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # Tabel audit_log
         cur.execute("""
             CREATE TABLE IF NOT EXISTS audit_log (
                 id           INT AUTO_INCREMENT PRIMARY KEY,
@@ -1429,31 +875,18 @@ if __name__ == "__main__":
             )
         """)
     conn.commit()
-    # Tambah kolom last_login jika belum ada (untuk tabel users yang sudah terbuat sebelumnya)
     try:
         with conn.cursor() as cur:
-            cur.execute("""
-                ALTER TABLE users ADD COLUMN last_login DATETIME DEFAULT NULL
-            """)
+            cur.execute("ALTER TABLE users ADD COLUMN last_login DATETIME DEFAULT NULL")
         conn.commit()
     except Exception:
-        pass  # Kolom sudah ada, abaikan error
-    # Tambah kolom user_id ke notifikasi jika belum ada (migrasi tabel existing)
+        pass
     try:
         with conn.cursor() as cur:
-            cur.execute("""
-                ALTER TABLE notifikasi ADD COLUMN user_id INT DEFAULT NULL
-            """)
+            cur.execute("ALTER TABLE notifikasi ADD COLUMN user_id INT DEFAULT NULL")
         conn.commit()
     except Exception:
-        pass  # Kolom sudah ada, abaikan error
-    conn.close()
-  if __name__ == "__main__":
-    conn = get_db()
-    with conn.cursor() as cur:
-        # ... (semua create table tetap sama)
-    conn.commit()
-    # ... (semua alter table tetap sama)
+        pass
     conn.close()
     print("ok")
     port = int(os.environ.get("PORT", 5000))
