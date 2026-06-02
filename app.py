@@ -1448,6 +1448,13 @@ if __name__ == "__main__":
     except Exception:
         pass  # Kolom sudah ada, abaikan error
     conn.close()
+  if __name__ == "__main__":
+    conn = get_db()
+    with conn.cursor() as cur:
+        # ... (semua create table tetap sama)
+    conn.commit()
+    # ... (semua alter table tetap sama)
+    conn.close()
     print("ok")
     port = int(os.environ.get("PORT", 5000))
-app.run(debug=False, host="0.0.0.0", port=port)
+    app.run(debug=False, host="0.0.0.0", port=port)
