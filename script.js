@@ -1,5 +1,5 @@
 // ── AUTH: JWT-based (data dari database, bukan hard-coded) ────────
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'https://cobapart3-production.up.railway.app';
 
 // Simpan & ambil token dari localStorage
 function saveToken(token)  { localStorage.setItem('auth_token', token); }
