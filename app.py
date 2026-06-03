@@ -963,6 +963,9 @@ def chart_summary_table():
 
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=False, host="0.0.0.0", port=port)
+
     # Pastikan tabel notifikasi ada di MySQL
     conn = get_db()
     with conn.cursor() as cur:
@@ -971,11 +974,13 @@ if __name__ == "__main__":
                 id           INT AUTO_INCREMENT PRIMARY KEY,
                 pesan        TEXT NOT NULL,
                 tipe         VARCHAR(20) DEFAULT 'info',
-                sudah_dibaca TINYINT(1)  DEFAULT 0,
-                dibuat_pada  DATETIME    DEFAULT CURRENT_TIMESTAMP
+                sudah_dibaca TINYINT(1) DEFAULT 0,
+                dibuat_pada  DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
     conn.commit()
     conn.close()
+
     print("ok")
     app.run(debug=True, port=5000)
