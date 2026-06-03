@@ -1,25 +1,26 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import pymysql
 import pymysql.cursors
-from datetime import datetime
+from datetime import datetime, timedelta
+import bcrypt
+import jwt
+import functools
+import os
 
 app = Flask(__name__)
-CORS(app, origins=[
-        "http://127.0.0.1:5500", "http://localhost:5500",
-        "http://127.0.0.1:5501", "http://localhost:5501",
-        "http://127.0.0.1:5000", "http://localhost:5000",
-        "http://127.0.0.1:8080", "http://localhost:8080",
-    ],
-     supports_credentials=False)
+CORS(app, origins="*", supports_credentials=False)
+
+JWT_SECRET = "indocement_jwt_secret_ganti_ini_di_production"
+JWT_EXPIRY_DAYS = 7
 
 # ── KONFIGURASI MySQL ─────────────────────────────────────────────
 MYSQL_CONFIG = {
-    "host":     "127.0.0.1",
-    "port":     3306,
-    "user":     "root",       # ← sesuaikan dengan user MySQL kamu
-    "password": "=",           # ← sesuaikan dengan password MySQL kamu
-    "database": "indocement",
+    "host":     os.environ.get("MYSQLHOST", "127.0.0.1"),
+    "port":     int(os.environ.get("MYSQLPORT", 3306)),
+    "user":     os.environ.get("MYSQLUSER", "root"),
+    "password": os.environ.get("MYSQLPASSWORD", ""),
+    "database": os.environ.get("MYSQLDATABASE", "railway"),
     "cursorclass": pymysql.cursors.DictCursor,
     "charset":  "utf8mb4",
 }
@@ -196,6 +197,225 @@ def fmt_rupiah(val_juta):
     else:                       # < 1 triliun → miliar
         return f"{v / 1_000:.2f} M"
 
+
+
+
+def generate_token(user_id, username, role):
+    payload = {
+        "user_id": user_id,
+        "username": username,
+        "role": role,
+        "exp": datetime.utcnow() + timedelta(days=JWT_EXPIRY_DAYS)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+def decode_token(token):
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+def require_auth(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Token tidak ditemukan"}), 401
+        token = auth_header.split(" ", 1)[1]
+        payload = decode_token(token)
+        if not payload:
+            return jsonify({"error": "Token tidak valid atau sudah kadaluarsa"}), 401
+        request.current_user = payload
+        return f(*args, **kwargs)
+    return wrapper
+
+def require_admin(f):
+    @functools.wraps(f)
+    @require_auth
+    def wrapper(*args, **kwargs):
+        if request.current_user.get("role") != "admin":
+            return jsonify({"error": "Akses ditolak"}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
+# ── ENDPOINT: REGISTER ───────────────────────────────────────────
+@app.route("/api/register", methods=["POST"])
+def register():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Data tidak boleh kosong"}), 400
+
+    username      = (data.get("username") or "").strip()
+    password      = data.get("password") or ""
+    nama_depan    = (data.get("nama_depan") or "").strip()
+    nama_belakang = (data.get("nama_belakang") or "").strip()
+    email         = (data.get("email") or "").strip()
+    divisi        = (data.get("divisi") or "").strip()
+    role          = data.get("role") or "user"
+
+    if not username:
+        return jsonify({"error": "Username wajib diisi"}), 400
+    if len(username) < 3:
+        return jsonify({"error": "Username minimal 3 karakter"}), 400
+    if not username.replace("_", "").isalnum():
+        return jsonify({"error": "Username hanya boleh huruf, angka, dan underscore"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password minimal 6 karakter"}), 400
+    if not nama_depan:
+        return jsonify({"error": "Nama depan wajib diisi"}), 400
+    if role not in ("admin", "user"):
+        role = "user"
+
+    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    nama_lengkap  = f"{nama_depan} {nama_belakang}".strip()
+
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+            if cur.fetchone():
+                return jsonify({"error": "Username sudah digunakan."}), 409
+            cur.execute(
+                """INSERT INTO users (username, password_hash, nama_lengkap, email, divisi, role)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (username, password_hash, nama_lengkap, email or None, divisi or None, role)
+            )
+            user_id = cur.lastrowid
+        conn.commit()
+        token = generate_token(user_id, username, role)
+        return jsonify({
+            "status": "ok",
+            "token": token,
+            "user": {"id": user_id, "username": username, "nama": nama_lengkap, "role": role}
+        }), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ── ENDPOINT: LOGIN ──────────────────────────────────────────────
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Data tidak boleh kosong"}), 400
+
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+
+    if not username or not password:
+        return jsonify({"error": "Username dan password wajib diisi"}), 400
+
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, username, password_hash, nama_lengkap, role, divisi FROM users WHERE username = %s",
+                (username,)
+            )
+            user = cur.fetchone()
+
+        if not user:
+            return jsonify({"error": "Username atau password salah"}), 401
+        if not bcrypt.checkpw(password.encode("utf-8"), user["password_hash"].encode("utf-8")):
+            return jsonify({"error": "Username atau password salah"}), 401
+
+        now = datetime.utcnow()
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET last_login = %s WHERE id = %s", (now, user["id"]))
+        conn.commit()
+
+        token = generate_token(user["id"], user["username"], user["role"])
+        initials = "".join(w[0].upper() for w in (user["nama_lengkap"] or username).split()[:2]) or username[:2].upper()
+        return jsonify({
+            "status": "ok",
+            "token": token,
+            "user": {
+                "id":       user["id"],
+                "username": user["username"],
+                "nama":     user["nama_lengkap"] or user["username"],
+                "role":     user["role"],
+                "divisi":   user["divisi"] or "",
+                "initials": initials,
+                "last_login": now.strftime("%d %b %Y, %H:%M")
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ── ENDPOINT: LOGOUT ─────────────────────────────────────────────
+@app.route("/api/logout", methods=["POST"])
+@require_auth
+def logout():
+    return jsonify({"status": "ok"})
+
+
+# ── ENDPOINT: VERIFY TOKEN ───────────────────────────────────────
+@app.route("/api/auth/me", methods=["GET"])
+@require_auth
+def auth_me():
+    payload = request.current_user
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, username, nama_lengkap, role, divisi FROM users WHERE id = %s",
+                (payload["user_id"],)
+            )
+            user = cur.fetchone()
+        if not user:
+            return jsonify({"error": "User tidak ditemukan"}), 404
+        initials = "".join(w[0].upper() for w in (user["nama_lengkap"] or user["username"]).split()[:2])
+        return jsonify({
+            "status": "ok",
+            "user": {
+                "id":       user["id"],
+                "username": user["username"],
+                "nama":     user["nama_lengkap"] or user["username"],
+                "role":     user["role"],
+                "divisi":   user["divisi"] or "",
+                "initials": initials
+            }
+        })
+    finally:
+        conn.close()
+
+
+# ── ENDPOINT: GANTI PASSWORD ─────────────────────────────────────
+@app.route("/api/auth/change-password", methods=["POST"])
+@require_auth
+def change_password():
+    data = request.get_json()
+    old_password = data.get("old_password") or ""
+    new_password = data.get("new_password") or ""
+    if len(new_password) < 6:
+        return jsonify({"error": "Password baru minimal 6 karakter"}), 400
+    user_id = request.current_user["user_id"]
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT password_hash FROM users WHERE id = %s", (user_id,))
+            row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "User tidak ditemukan"}), 404
+        if not bcrypt.checkpw(old_password.encode("utf-8"), row["password_hash"].encode("utf-8")):
+            return jsonify({"error": "Password saat ini tidak sesuai"}), 401
+        new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (new_hash, user_id))
+        conn.commit()
+        return jsonify({"status": "ok", "pesan": "Password berhasil diperbarui."})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 
 # ── ENDPOINT: TAMBAH DATA KEUANGAN ───────────────────────────────
 @app.route("/api/keuangan", methods=["POST"])
@@ -828,139 +1048,6 @@ def kpi_kfi():
         "roe":             build_ratio(roe_cur,  roe_prev,  unit="%", higher_is_better=True),
         "roce":            build_ratio(roce_cur, roce_prev, unit="%", higher_is_better=True),
     })
-
-
-
-# ── ENDPOINT: CHART DATA — OCF TREND ────────────────────────────
-@app.route("/api/kpi/chart/ocf-trend", methods=["GET"])
-def chart_ocf_trend():
-    tahun   = request.args.get("tahun",   type=int)
-    kuartal = request.args.get("kuartal", type=str)
-
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            if tahun and kuartal:
-                cur.execute("""
-                    SELECT `year`, `quarter`, CFO, fcf
-                    FROM indocement
-                    WHERE `year`=%s AND `quarter`=%s
-                    ORDER BY `year`, FIELD(`quarter`,'Q1','Q2','Q3','Q4')
-                """, (tahun, kuartal))
-            elif tahun:
-                cur.execute("""
-                    SELECT `year`, `quarter`, CFO, fcf
-                    FROM indocement
-                    WHERE `year`=%s
-                    ORDER BY `year`, FIELD(`quarter`,'Q1','Q2','Q3','Q4')
-                """, (tahun,))
-            else:
-                cur.execute("""
-                    SELECT `year`, `quarter`, CFO, fcf
-                    FROM indocement
-                    ORDER BY `year`, FIELD(`quarter`,'Q1','Q2','Q3','Q4')
-                """)
-            rows = cur.fetchall()
-    finally:
-        conn.close()
-
-    labels  = [f"{r['quarter']} {r['year']}" for r in rows]
-    ocf     = [float(r['CFO'])  / 1000 if r['CFO']  is not None else None for r in rows]
-    fcf     = [float(r['fcf'])  / 1000 if r['fcf']  is not None else None for r in rows]
-
-    return jsonify({"labels": labels, "ocf": ocf, "fcf": fcf})
-
-
-# ── ENDPOINT: CHART DATA — NET INCOME VS OCF ────────────────────
-@app.route("/api/kpi/chart/income-ocf", methods=["GET"])
-def chart_income_ocf():
-    tahun   = request.args.get("tahun",   type=int)
-    kuartal = request.args.get("kuartal", type=str)
-
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            if tahun and kuartal:
-                cur.execute("""
-                    SELECT `year`, `quarter`, net_income, CFO
-                    FROM indocement
-                    WHERE `year`=%s AND `quarter`=%s
-                    ORDER BY `year`, FIELD(`quarter`,'Q1','Q2','Q3','Q4')
-                """, (tahun, kuartal))
-            elif tahun:
-                cur.execute("""
-                    SELECT `year`, `quarter`, net_income, CFO
-                    FROM indocement
-                    WHERE `year`=%s
-                    ORDER BY `year`, FIELD(`quarter`,'Q1','Q2','Q3','Q4')
-                """, (tahun,))
-            else:
-                cur.execute("""
-                    SELECT `year`, `quarter`, net_income, CFO
-                    FROM indocement
-                    ORDER BY `year`, FIELD(`quarter`,'Q1','Q2','Q3','Q4')
-                """)
-            rows = cur.fetchall()
-    finally:
-        conn.close()
-
-    labels     = [f"{r['quarter']} {r['year']}" for r in rows]
-    net_income = [float(r['net_income']) / 1000 if r['net_income'] is not None else None for r in rows]
-    ocf        = [float(r['CFO'])        / 1000 if r['CFO']        is not None else None for r in rows]
-
-    return jsonify({"labels": labels, "net_income": net_income, "ocf": ocf})
-
-
-# ── ENDPOINT: CHART DATA — FINANCIAL SUMMARY TABLE ──────────────
-@app.route("/api/kpi/chart/summary-table", methods=["GET"])
-def chart_summary_table():
-    tahun   = request.args.get("tahun",   type=int)
-    kuartal = request.args.get("kuartal", type=str)
-    limit   = request.args.get("limit",   type=int, default=40)
-
-    conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            if tahun and kuartal:
-                cur.execute("""
-                    SELECT `year`, `quarter`, CFO, net_income, fcf, revenue
-                    FROM indocement
-                    WHERE `year`=%s AND `quarter`=%s
-                    ORDER BY `year` DESC, FIELD(`quarter`,'Q4','Q3','Q2','Q1')
-                    LIMIT %s
-                """, (tahun, kuartal, limit))
-            elif tahun:
-                cur.execute("""
-                    SELECT `year`, `quarter`, CFO, net_income, fcf, revenue
-                    FROM indocement
-                    WHERE `year`=%s
-                    ORDER BY `year` DESC, FIELD(`quarter`,'Q4','Q3','Q2','Q1')
-                    LIMIT %s
-                """, (tahun, limit))
-            else:
-                cur.execute("""
-                    SELECT `year`, `quarter`, CFO, net_income, fcf, revenue
-                    FROM indocement
-                    ORDER BY `year` DESC, FIELD(`quarter`,'Q4','Q3','Q2','Q1')
-                    LIMIT %s
-                """, (limit,))
-            rows = cur.fetchall()
-    finally:
-        conn.close()
-
-    result = []
-    for r in rows:
-        result.append({
-            "year":       r["year"],
-            "quarter":    r["quarter"],
-            "ocf":        float(r["CFO"])        / 1000 if r["CFO"]        is not None else None,
-            "net_income": float(r["net_income"]) / 1000 if r["net_income"] is not None else None,
-            "fcf":        float(r["fcf"])        / 1000 if r["fcf"]        is not None else None,
-            "revenue":    float(r["revenue"])    / 1000 if r["revenue"]    is not None else None,
-        })
-
-    return jsonify({"rows": result, "total": len(result)})
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
