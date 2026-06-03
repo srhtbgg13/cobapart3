@@ -17,11 +17,11 @@ CORS(app, origins=[
 
 # ── KONFIGURASI MySQL ─────────────────────────────────────────────
 MYSQL_CONFIG = {
-    "host":     "127.0.0.1",
-    "port":     3306,
-    "user":     "root",       # ← sesuaikan dengan user MySQL kamu
-    "password": "=",           # ← sesuaikan dengan password MySQL kamu
-    "database": "indocement",
+    "host":     os.environ.get("MYSQLHOST", "127.0.0.1"),
+    "port":     int(os.environ.get("MYSQLPORT", 3306)),
+    "user":     os.environ.get("MYSQLUSER", "root"),
+    "password": os.environ.get("MYSQLPASSWORD", ""),
+    "database": os.environ.get("MYSQLDATABASE", "railway"),
     "cursorclass": pymysql.cursors.DictCursor,
     "charset":  "utf8mb4",
 }
@@ -833,61 +833,5 @@ def kpi_kfi():
 
 
 if __name__ == "__main__":
-
-    with conn.cursor() as cur:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS notifikasi (
-                id           INT AUTO_INCREMENT PRIMARY KEY,
-                pesan        TEXT NOT NULL,
-                tipe         VARCHAR(20) DEFAULT 'info',
-                sudah_dibaca TINYINT(1)  DEFAULT 0,
-                user_id      INT          DEFAULT NULL,
-                dibuat_pada  DATETIME    DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id            INT AUTO_INCREMENT PRIMARY KEY,
-                username      VARCHAR(50)  UNIQUE NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                nama_lengkap  VARCHAR(100),
-                email         VARCHAR(150),
-                divisi        VARCHAR(100),
-                role          ENUM('admin','user') DEFAULT 'user',
-                last_login    DATETIME DEFAULT NULL,
-                dibuat_pada   DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS audit_log (
-                id           INT AUTO_INCREMENT PRIMARY KEY,
-                user_id      INT          DEFAULT NULL,
-                username     VARCHAR(50)  DEFAULT NULL,
-                aksi         VARCHAR(50)  NOT NULL,
-                tabel_target VARCHAR(50)  NOT NULL,
-                record_id    INT          DEFAULT NULL,
-                data_lama    JSON         DEFAULT NULL,
-                data_baru    JSON         DEFAULT NULL,
-                dibuat_pada  DATETIME     DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_user_id    (user_id),
-                INDEX idx_aksi       (aksi),
-                INDEX idx_dibuat_pada(dibuat_pada)
-            )
-        """)
-    conn.commit()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("ALTER TABLE users ADD COLUMN last_login DATETIME DEFAULT NULL")
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        with conn.cursor() as cur:
-            cur.execute("ALTER TABLE notifikasi ADD COLUMN user_id INT DEFAULT NULL")
-        conn.commit()
-    except Exception:
-        pass
-    conn.close()
-    print("ok")
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
