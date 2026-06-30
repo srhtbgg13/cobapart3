@@ -1,10 +1,12 @@
 // ── AUTH: JWT-based (data dari database, bukan hard-coded) ────────
-const API_BASE = 'https://cobapart3-production.up.railway.app';
+// const API_BASE = 'http://localhost:5000';
 
-// Simpan & ambil token dari localStorage
-function saveToken(token)  { localStorage.setItem('auth_token', token); }
-function getToken()        { return localStorage.getItem('auth_token'); }
-function removeToken()     { localStorage.removeItem('auth_token'); }
+const API_BASE = "https://horn-southwest-total-liverpool.trycloudflare.com";
+
+// Simpan & ambil token dari sessionStorage (sesi hanya berlaku selama tab terbuka)
+function saveToken(token)  { sessionStorage.setItem('auth_token', token); }
+function getToken()        { return sessionStorage.getItem('auth_token'); }
+function removeToken()     { sessionStorage.removeItem('auth_token'); }
 
 // Buat header Authorization untuk setiap fetch ke API
 function authHeaders() {
@@ -20,6 +22,7 @@ let selectedLoginRole = 'admin';
 
 // Cek token saat halaman pertama kali dibuka
 async function checkSavedSession() {
+  localStorage.removeItem('auth_token'); // Bersihkan token lama dari localStorage jika ada
   const token = getToken();
   if (!token) return;
   try {
@@ -57,10 +60,20 @@ function setLoginRoleTab(role) {
   document.getElementById('loginError').style.display = 'none';
   document.getElementById('loginUsername').value = '';
   document.getElementById('loginPassword').value = '';
-  document.getElementById('loginUsername').focus();
-  const isUser = role === 'user';
-  document.getElementById('loginGuestBtn').style.display     = isUser ? 'flex' : 'none';
-  document.getElementById('loginGuestDivider').style.display = isUser ? 'flex' : 'none';
+
+  const isGuest = role === 'guest';
+
+  // Tampilkan/sembunyikan form login vs panel guest
+  document.getElementById('loginFormBody').style.display    = isGuest ? 'none' : 'block';
+  document.getElementById('loginGuestPanel').style.display  = isGuest ? 'block' : 'none';
+
+  // Sembunyikan hint & register link saat tab guest (sudah ada tombol masuk di panel)
+  const hintEl = document.getElementById('loginHint');
+  const regEl  = document.getElementById('loginRegisterLink');
+  if (hintEl) hintEl.style.display     = isGuest ? 'none' : '';
+  if (regEl)  regEl.style.display      = isGuest ? 'none' : '';
+
+  if (!isGuest) document.getElementById('loginUsername').focus();
 }
 
 async function doLogin() {
@@ -104,25 +117,25 @@ async function doLogin() {
 }
 
 function loginAsGuest() {
-  currentRole = 'user';
+  currentRole = 'guest';
   currentUser  = null;
-  document.body.classList.remove('role-admin', 'role-user');
-  document.body.classList.add('role-user');
+  document.body.classList.remove('role-admin', 'role-user', 'role-manajemen', 'role-guest');
+  document.body.classList.add('role-guest');
   document.getElementById('headerAvatar').textContent    = 'G';
   document.getElementById('headerUserName').textContent  = 'Tamu';
   document.getElementById('headerUserRole').textContent  = 'Guest Access';
-  document.getElementById('headerRoleBadge').textContent = 'User';
+  document.getElementById('headerRoleBadge').textContent = 'Guest';
   closeLoginModal();
   switchPage('keuangan');
 }
 
 function applyRole(user) {
-  document.body.classList.remove('role-admin', 'role-user');
+  document.body.classList.remove('role-admin', 'role-user', 'role-manajemen', 'role-guest');
   document.body.classList.add('role-' + user.role);
   document.getElementById('headerAvatar').textContent    = user.initials || user.username.slice(0,2).toUpperCase();
   document.getElementById('headerUserName').textContent  = user.nama || user.username;
-  document.getElementById('headerUserRole').textContent  = user.divisi || (user.role === 'admin' ? 'Administrator' : 'Read Only Access');
-  document.getElementById('headerRoleBadge').textContent = user.role === 'admin' ? 'Admin' : 'User';
+  document.getElementById('headerUserRole').textContent  = user.divisi || (user.role === 'admin' ? 'Administrator' : user.role === 'manajemen' ? 'Manajemen Access' : 'Read Only Access');
+  document.getElementById('headerRoleBadge').textContent = user.role === 'admin' ? 'Admin' : user.role === 'manajemen' ? 'Manajemen' : 'Guest';
   // Sembunyikan tombol Login di hero setelah user berhasil login
   const hpLoginBtn = document.getElementById('hpLoginBtn');
   if (hpLoginBtn) hpLoginBtn.style.display = 'none';
@@ -141,7 +154,7 @@ async function doLogout() {
   removeToken();
   currentRole = null;
   currentUser  = null;
-  document.body.classList.remove('role-admin', 'role-user');
+  document.body.classList.remove('role-admin', 'role-user', 'role-manajemen', 'role-guest');
   // Tampilkan kembali tombol Login di hero
   const hpLoginBtn = document.getElementById('hpLoginBtn');
   if (hpLoginBtn) hpLoginBtn.style.display = '';
@@ -209,17 +222,45 @@ const pageMeta = {
     title: "PT Indocement Financial Dashboard",
     sub:   "Financial Analytics Platform"
   },
-  // Dashboard Keuangan → Operasional
-  keuangan:    { title: "Dashboard Keuangan", sub: "Operasional — Financial Overview · Per data terakhir: December 2025" },
-  operasional: { title: "Dashboard Keuangan", sub: "Operasional — Resource Overview · Per data terakhir: December 2025" },
-  penjualan:   { title: "Dashboard Keuangan", sub: "Operasional — Cash Flow Health · Per data terakhir: December 2025" },
-  // Dashboard Keuangan → Financial Performance
-  margin:  { title: "Dashboard Keuangan", sub: "Financial Performance — Margin Trends · Per data terakhir: December 2025" },
-  balance: { title: "Dashboard Keuangan", sub: "Financial Performance — Balance Sheet Trends · Per data terakhir: December 2025" },
-  kfi:     { title: "Dashboard Keuangan", sub: "Financial Performance — Key Financial Indicators · Per data terakhir: December 2025" },
-  // Laporan Keuangan
-  'laporan-keuangan': { title: "Laporan Keuangan", sub: "PT Indocement Tunggal Prakarsa Tbk" },
-  admin: { title: "Admin Panel", sub: "Kelola data & pengumuman — PT INDOCEMENT" },
+ // Financial Dashboard → Operational Overview
+keuangan: {
+  title: "Financial Dashboard",
+  sub: "Operational Overview — Financial Performance Summary · As of December 2025"
+},
+operasional: {
+  title: "Financial Dashboard",
+  sub: "Operational Overview — Resource Management Summary · As of December 2025"
+},
+penjualan: {
+  title: "Financial Dashboard",
+  sub: "Operational Overview — Cash Flow Analysis · As of December 2025"
+},
+
+// Financial Dashboard → Financial Performance
+margin: {
+  title: "Financial Dashboard",
+  sub: "Financial Performance — Profit Margin Trends · As of December 2025"
+},
+balance: {
+  title: "Financial Dashboard",
+  sub: "Financial Performance — Balance Sheet Analysis · As of December 2025"
+},
+kfi: {
+  title: "Financial Dashboard",
+  sub: "Financial Performance — Key Financial Indicators (KFIs) · As of December 2025"
+},
+
+// Financial Statements
+'laporan-keuangan': {
+  title: "Financial Statements",
+  sub: "PT Indocement Tunggal Prakarsa Tbk"
+},
+
+// Administration
+admin: {
+  title: "Administration Panel",
+  sub: "Manage Financial Data and Corporate Announcements — PT Indocement Tunggal Prakarsa Tbk"
+},
 };
 
 /* ── MAP: page → nav group yang harus dibuka otomatis ── */
@@ -394,8 +435,46 @@ function initQuarterBtns(groupId, hiddenInputId, onChangeCallback) {
 const KEU = {
   "keu-chart1": "http://localhost:3000/public/question/cc5f3355-5e12-442c-b9a1-780f2b9cd21f?titled=false",
   "keu-chart2": "http://localhost:3000/public/question/9cfdc768-ee6f-4e39-8044-a59785117ea7?titled=false",
-  "keu-chart3": "http://localhost:3000/public/question/36fff35d-3860-4642-979e-9fe40cca46aa?titled=false",
 };
+
+/* ── Render tabel ringkasan keuangan dari Flask API ── */
+async function renderKeuTable(tahun, kuartal) {
+  const tbody   = document.getElementById('keu-summary-tbody');
+  const rowcount = document.getElementById('keu-table-rowcount');
+  if (!tbody) return;
+
+  tbody.innerHTML = '<tr><td colspan="6" class="keu-table-loading">· · ·</td></tr>';
+
+  const params = new URLSearchParams();
+  if (tahun)   params.set('tahun',   tahun);
+  if (kuartal) params.set('kuartal', kuartal);
+
+  try {
+    const res  = await fetch(`${API_BASE}/api/tabel/keuangan?${params}`);
+    const data = await res.json();
+
+    if (!data.ada_data || !data.rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="keu-table-loading">Tidak ada data</td></tr>';
+      if (rowcount) rowcount.textContent = '0 rows';
+      return;
+    }
+
+    tbody.innerHTML = data.rows.map(r => `
+      <tr>
+        <td>${r.year}</td>
+        <td>${r.quarter}</td>
+        <td class="num">${r.ocf}</td>
+        <td class="num">${r.net_income}</td>
+        <td class="num">${r.fcf}</td>
+        <td class="num">${r.current_ratio}</td>
+      </tr>`).join('');
+
+    if (rowcount) rowcount.textContent = `${data.total} rows`;
+  } catch (_) {
+    tbody.innerHTML = '<tr><td colspan="6" class="keu-table-loading">Gagal memuat data</td></tr>';
+    if (rowcount) rowcount.textContent = '';
+  }
+}
 
 function updateKeuangan() {
   const params = new URLSearchParams();
@@ -409,10 +488,14 @@ function updateKeuangan() {
   const showEl = document.getElementById('keu-showingYear');
   if (showEl) showEl.textContent = y || 'All Years';
 
+  // Update Metabase iframe charts (hanya chart1 & chart2)
   Object.entries(KEU).forEach(([id, base]) => {
     const el = document.getElementById(id);
     if (el) el.src = qs ? `${base}&${qs}` : base;
   });
+
+  // Update tabel ringkasan dari Flask API
+  renderKeuTable(y, q);
 }
 
 const _keuYearFilterEl = document.getElementById("keu-yearFilter");
@@ -448,24 +531,39 @@ initQuarterBtns('ops-quarterBtns', 'ops-catFilter', updateOps);
 
 /* ── 6. PROFIT VS CASH QUALITY FILTERS ── */
 const PCQ_BASES = {
-  "pcq-chart1": "http://localhost:3000/public/question/9cfdc768-ee6f-4e39-8044-a59785117ea7?titled=false",
+  "pcq-chart-eqr-trend": "http://localhost:3000/public/question/d9e197ac-9786-4707-b8dd-be6242b5725c?titled=false",
+  "pcq-chart-table-laba": "http://localhost:3000/public/question/294812b0-f504-400d-9709-9b8e188a2a3a?titled=false",
 };
 
 function updatePCQ() {
-  const params = new URLSearchParams();
   const y = document.getElementById("pcq-yearFilter").value;
   const q = document.getElementById("pcq-quarterFilter").value;
-  if (y) params.set("year",    y);
-  if (q) params.set("quarter", q);
-  const qs = params.toString();
 
   const showEl = document.getElementById('pcq-showingYear');
   if (showEl) showEl.textContent = y || 'All Years';
 
+  // Update Metabase iframes
   Object.entries(PCQ_BASES).forEach(([id, base]) => {
     const el = document.getElementById(id);
-    if (el) el.src = qs ? `${base}&${qs}` : base;
+    if (!el) return;
+    const params = new URLSearchParams();
+    if (y) params.set("year", y);
+    if (q) params.set("quarter", q);
+    const qs = params.toString();
+    const freshUrl = (qs ? `${base}&${qs}` : base) + '&_t=' + Date.now();
+    el.style.opacity = '0';
+    // Show placeholder saat reload
+    const placeholderId = id === 'pcq-chart-table-laba' ? 'pcq-table-placeholder' : 'pcq-eqr-placeholder';
+    const ph = document.getElementById(placeholderId);
+    if (ph) ph.style.display = 'flex';
+    el.src = 'about:blank';
+    setTimeout(() => { el.src = freshUrl; }, 80);
   });
+
+  // Update scatter plot filter
+  if (typeof window.pcqScatterSetFilter === 'function') {
+    window.pcqScatterSetFilter(y ? parseInt(y) : null, q || null);
+  }
 }
 
 initQuarterBtns('pcq-quarterBtns', 'pcq-quarterFilter', updatePCQ);
@@ -519,11 +617,11 @@ initQuarterBtns('mg-quarterBtns', 'mg-quarterFilter', updateMargin);
    ══════════════════════════════════════════ */
 
 const OPS_KPI_MAP = [
-  { valId: 'ops-kpi-operating',  badgeId: 'ops-kpi-operating-badge',  key: 'operating',  suffix: '%' },
-  { valId: 'ops-kpi-investing',  badgeId: 'ops-kpi-investing-badge',   key: 'investing',  suffix: '%' },
-  { valId: 'ops-kpi-financing',  badgeId: 'ops-kpi-financing-badge',   key: 'financing',  suffix: '%' },
-  { valId: 'ops-kpi-inflow',     badgeId: 'ops-kpi-inflow-badge',      key: 'inflow',     prefix: 'Rp ', suffix: '' },
-  { valId: 'ops-kpi-outflow',    badgeId: 'ops-kpi-outflow-badge',     key: 'outflow',    prefix: 'Rp ', suffix: '' },
+  { valId: 'ops-kpi-operating',  badgeId: 'ops-kpi-operating-badge',  periodId: 'ops-kpi-period-1', key: 'operating',  suffix: '%' },
+  { valId: 'ops-kpi-investing',  badgeId: 'ops-kpi-investing-badge',  periodId: 'ops-kpi-period-2', key: 'investing',  suffix: '%' },
+  { valId: 'ops-kpi-financing',  badgeId: 'ops-kpi-financing-badge',  periodId: 'ops-kpi-period-3', key: 'financing',  suffix: '%' },
+  { valId: 'ops-kpi-inflow',     badgeId: 'ops-kpi-inflow-badge',     periodId: 'ops-kpi-period-4', key: 'inflow',     prefix: 'Rp ', suffix: '' },
+  { valId: 'ops-kpi-outflow',    badgeId: 'ops-kpi-outflow-badge',    periodId: 'ops-kpi-period-5', key: 'outflow',    prefix: 'Rp ', suffix: '' },
 ];
 
 function setOpsKpiLoading() {
@@ -533,14 +631,21 @@ function setOpsKpiLoading() {
   });
 }
 
-function renderOpsKpiCard({ valId, badgeId, key, prefix = '', suffix = '' }, data) {
-  const valEl   = document.getElementById(valId);
-  const badgeEl = document.getElementById(badgeId);
+function renderOpsKpiCard({ valId, badgeId, periodId, key, prefix = '', suffix = '' }, data) {
+  const valEl    = document.getElementById(valId);
+  const badgeEl  = document.getElementById(badgeId);
+  const periodEl = periodId ? document.getElementById(periodId) : null;
   if (!valEl) return;
+
+  const isAllYears = !data.filter?.tahun; // "All Years" = tidak ada tahun terpilih
+  // Featured card (% Operating Contribution) butuh class tambahan kpi-oc-changebadge
+  // agar styling gradient birunya tetap konsisten, tidak tertimpa saat di-restyle.
+  const extraClass = badgeEl?.classList.contains('kpi-oc-changebadge') ? ' kpi-oc-changebadge' : '';
 
   if (!data.ada_data || !data[key] || data[key].nilai === undefined || data[key].nilai === null) {
     valEl.innerHTML = '<span class="kpi-loading">—</span>';
-    if (badgeEl) { badgeEl.textContent = '—'; badgeEl.className = 'kpi-badge'; }
+    if (badgeEl)  { badgeEl.textContent = '—'; badgeEl.className = 'kpi-badge' + extraClass; badgeEl.style.display = ''; }
+    if (periodEl) periodEl.style.display = '';
     return;
   }
 
@@ -551,31 +656,34 @@ function renderOpsKpiCard({ valId, badgeId, key, prefix = '', suffix = '' }, dat
     valEl.classList.remove('kpi-updating');
   }, 180);
 
-  if (badgeEl) {
-    if (d.pct !== null && d.pct !== undefined) {
-      const naik = d.pct >= 0;
-      badgeEl.innerHTML = `${naik ? '↑ +' : '↓ '}${Math.abs(d.pct)}%`;
-      badgeEl.className = 'kpi-badge ' + (naik ? 'up' : 'down');
-    } else {
-      badgeEl.textContent = 'base year';
-      badgeEl.className   = 'kpi-badge';
+  if (isAllYears) {
+    // "All Years" dipilih → tidak ada basis perbandingan, sembunyikan badge & label periode
+    if (badgeEl)  badgeEl.style.display  = 'none';
+    if (periodEl) periodEl.style.display = 'none';
+  } else if (d.pct !== null && d.pct !== undefined) {
+    const naik = d.pct >= 0;
+    if (badgeEl) {
+      badgeEl.innerHTML     = `${naik ? '↑ +' : '↓ '}${Math.abs(d.pct)}%`;
+      badgeEl.className     = 'kpi-badge ' + (naik ? 'up' : 'down') + extraClass;
+      badgeEl.style.display = '';
     }
+    if (periodEl) {
+      const tahun   = data.filter?.tahun;
+      const kuartal = data.filter?.kuartal;
+      periodEl.textContent   = kuartal ? `vs ${kuartal} ${tahun - 1}` : 'vs last year';
+      periodEl.style.display = '';
+    }
+  } else {
+    if (badgeEl)  { badgeEl.textContent = 'base year'; badgeEl.className = 'kpi-badge' + extraClass; badgeEl.style.display = ''; }
+    if (periodEl) periodEl.style.display = '';
   }
 }
 
 function renderOpsKpi(data) {
   OPS_KPI_MAP.forEach(item => renderOpsKpiCard(item, data));
-
-  // Update period label — semua 5 KPI card
-  const tahun   = data.filter?.tahun;
-  const kuartal = data.filter?.kuartal;
-  const label   = tahun
-    ? (kuartal ? `${kuartal} ${tahun} vs ${kuartal} ${tahun - 1}` : `Full Year ${tahun} vs ${tahun - 1}`)
-    : 'vs last year';
-  ['ops-kpi-period-1','ops-kpi-period-2','ops-kpi-period-3','ops-kpi-period-4','ops-kpi-period-5'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = label;
-  });
+  // Label periode ("vs last year" / "vs Qn Tahun-1") dan visibilitas badge
+  // kini ditangani langsung di renderOpsKpiCard per-card (termasuk sembunyikan
+  // saat All Years dipilih), sehingga tidak perlu loop terpisah di sini.
 }
 
 async function updateKpiOps() {
@@ -634,7 +742,7 @@ async function updateKpiPCQ() {
 
     if (!data.ada_data) {
       if (eqrEl)    eqrEl.textContent = '—';
-      if (badgeEl)  { badgeEl.textContent = '—'; badgeEl.className = 'kpi-badge'; }
+      if (badgeEl)  { badgeEl.textContent = '—'; badgeEl.className = 'kpi-badge'; badgeEl.style.display = ''; }
       if (niValEl)  niValEl.textContent = '—';
       if (ocfValEl) ocfValEl.textContent = '—';
       return;
@@ -651,14 +759,20 @@ async function updateKpiPCQ() {
 
     // EQR badge
     if (badgeEl && data.eqr) {
+      const isAllYears = !tahun; // "All Years" = tidak ada tahun terpilih
       const pct = data.eqr.pct;
-      if (pct !== null && pct !== undefined) {
+      if (isAllYears) {
+        // "All Years" dipilih → tidak ada basis perbandingan, sembunyikan badge
+        badgeEl.style.display = 'none';
+      } else if (pct !== null && pct !== undefined) {
         const naik = pct >= 0;
-        badgeEl.innerHTML = `${naik ? '↑' : '↓'} ${Math.abs(pct)}% of net income`;
-        badgeEl.className = 'kpi-badge ' + (naik ? 'up' : 'down');
+        badgeEl.innerHTML     = `${naik ? '↑' : '↓'} ${Math.abs(pct)}% of net income`;
+        badgeEl.className     = 'kpi-badge ' + (naik ? 'up' : 'down');
+        badgeEl.style.display = '';
       } else {
-        badgeEl.textContent = 'base year';
-        badgeEl.className   = 'kpi-badge';
+        badgeEl.textContent    = 'base year';
+        badgeEl.className      = 'kpi-badge';
+        badgeEl.style.display  = '';
       }
     }
 
@@ -692,6 +806,443 @@ if (_pcqQGroup) {
     btn.addEventListener('click', () => setTimeout(updateKpiPCQ, 50));
   });
 }
+
+/* ══════════════════════════════════════════
+   SCATTER PLOT INTERAKTIF — Net Income vs CFO
+   Features: tooltip hover, highlight click,
+             animated entrance, trendline, r badge,
+             filter tahun/kuartal
+   ══════════════════════════════════════════ */
+(function() {
+  // Data lengkap semua tahun (annual — kuartal tidak ada di scatter ini)
+  const ALL_SDATA = [
+    {year:2016,ni:3.870,cfo:3.546,eqr:0.92},
+    {year:2017,ni:1.860,cfo:2.782,eqr:1.50},
+    {year:2018,ni:1.146,cfo:1.985,eqr:1.73},
+    {year:2019,ni:1.835,cfo:3.531,eqr:1.92},
+    {year:2020,ni:1.806,cfo:3.538,eqr:1.96},
+    {year:2021,ni:1.788,cfo:2.607,eqr:1.46},
+    {year:2022,ni:1.842,cfo:2.402,eqr:1.30},
+    {year:2023,ni:1.950,cfo:3.485,eqr:1.79},
+    {year:2024,ni:2.008,cfo:3.348,eqr:1.67},
+    {year:2025,ni:2.249,cfo:3.808,eqr:1.69}
+  ];
+
+  // Filter state
+  let filterYear    = null;  // null = All Years
+  let filterQuarter = null;  // null = All Quarters (scatter pakai annual, Q hanya highlight)
+
+  // Data aktif berdasarkan filter
+  function getActiveData() {
+    if (!filterYear) return ALL_SDATA;           // All Years → semua titik
+    return ALL_SDATA.filter(d => d.year === filterYear); // 1 titik saja
+  }
+
+  // Expose ke luar agar updatePCQ() bisa memanggil
+  window.pcqScatterSetFilter = function(year, quarter) {
+    filterYear    = year    || null;
+    filterQuarter = quarter || null;
+    recomputeStats();
+    hoveredIdx  = -1;
+    selectedIdx = -1;
+    startAnimation();   // re-animate saat filter berubah
+  };
+
+  // Hitung stats dari data aktif (untuk trendline & r)
+  let SDATA = ALL_SDATA;
+  let mx, my, CORR, SLOPE, ICEPT;
+
+  function recomputeStats() {
+    SDATA = getActiveData();
+    const n = SDATA.length;
+    if (n < 2) {
+      mx = SDATA[0]?.ni || 2; my = SDATA[0]?.cfo || 3;
+      CORR = 0; SLOPE = 0; ICEPT = my;
+      return;
+    }
+    mx = SDATA.reduce((s,d)=>s+d.ni,0)/n;
+    my = SDATA.reduce((s,d)=>s+d.cfo,0)/n;
+    const num = SDATA.reduce((s,d)=>s+(d.ni-mx)*(d.cfo-my),0);
+    const dx2 = SDATA.reduce((s,d)=>s+(d.ni-mx)**2,0);
+    const dy2 = SDATA.reduce((s,d)=>s+(d.cfo-my)**2,0);
+    CORR  = num/Math.sqrt(dx2*dy2);
+    SLOPE = num/dx2;
+    ICEPT = my - SLOPE*mx;
+  }
+  recomputeStats();
+
+  // State
+  let hoveredIdx = -1;
+  let selectedIdx = -1;
+  let animProgress = 0;
+  let animRAF = null;
+  let lastW = 0, lastH = 0;
+
+  // Layout constants
+  const ML=68, MR=24, MT=28, MB=62;
+  const X1=0.7, X2=4.5, Y1=1.3, Y2=4.6;
+
+  function getCanvas() { return document.getElementById('pcq-scatter-canvas'); }
+  function getTooltip() { return document.getElementById('pcq-scatter-tooltip'); }
+  function getWrap()    { return document.getElementById('pcq-scatter-wrap'); }
+
+  function getDims() {
+    const wrap = getWrap();
+    if (!wrap) return {W:0,H:0};
+    return { W: wrap.clientWidth||520, H: wrap.clientHeight||300 };
+  }
+
+  function makeCoordFns(W, H) {
+    const CW = W-ML-MR, CH = H-MT-MB;
+    return {
+      CW, CH,
+      px: v => ML + (v-X1)/(X2-X1)*CW,
+      py: v => MT + CH - (v-Y1)/(Y2-Y1)*CH
+    };
+  }
+
+  function hitTest(mouseX, mouseY, W, H) {
+    const {px, py} = makeCoordFns(W, H);
+    let best = -1, bestDist = 18;
+    // Gunakan ALL_SDATA agar ghost dots juga bisa di-hover
+    const testData = filterYear ? ALL_SDATA : SDATA;
+    testData.forEach((d, i) => {
+      const dist = Math.hypot(mouseX - px(d.ni), mouseY - py(d.cfo));
+      if (dist < bestDist) { bestDist = dist; best = i; }
+    });
+    return best;
+  }
+
+  function rrect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+    ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+    ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+    ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+    ctx.closePath();
+  }
+
+  function easeOut(t) { return 1 - Math.pow(1-t, 3); }
+
+  function draw(progress) {
+    const canvas = getCanvas();
+    if (!canvas) return;
+    const {W, H} = getDims();
+    if (W < 10 || H < 10) return;
+
+    const DPR = window.devicePixelRatio || 1;
+    if (W !== lastW || H !== lastH) {
+      canvas.width  = W * DPR;
+      canvas.height = H * DPR;
+      canvas.style.width  = W + 'px';
+      canvas.style.height = H + 'px';
+      lastW = W; lastH = H;
+    }
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.save(); ctx.scale(DPR, DPR);
+
+    const {CW, CH, px, py} = makeCoordFns(W, H);
+    const prog = progress !== undefined ? progress : animProgress;
+
+    // ── Background
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0,0,W,H);
+
+    // ── Grid
+    const xTicks = [1.0,1.5,2.0,2.5,3.0,3.5,4.0];
+    const yTicks = [1.5,2.0,2.5,3.0,3.5,4.0];
+    ctx.setLineDash([4,4]); ctx.lineWidth=1;
+    xTicks.forEach(v => {
+      const alpha = v===mx ? 0.25 : 0.15;
+      ctx.strokeStyle=`rgba(100,116,139,${alpha})`;
+      ctx.beginPath(); ctx.moveTo(px(v),MT); ctx.lineTo(px(v),MT+CH); ctx.stroke();
+    });
+    yTicks.forEach(v => {
+      const alpha = v===my ? 0.25 : 0.15;
+      ctx.strokeStyle=`rgba(100,116,139,${alpha})`;
+      ctx.beginPath(); ctx.moveTo(ML,py(v)); ctx.lineTo(ML+CW,py(v)); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // ── Mean crosshair (dashed, subtle)
+    ctx.strokeStyle='rgba(37,99,235,0.18)'; ctx.lineWidth=1.5; ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(px(mx),MT+4); ctx.lineTo(px(mx),MT+CH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ML,py(my)); ctx.lineTo(ML+CW-4,py(my)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Mean labels
+    ctx.fillStyle='rgba(37,99,235,0.5)'; ctx.font='10px Inter,sans-serif'; ctx.textAlign='center';
+    ctx.fillText('x̄', px(mx), MT+2);
+    ctx.textAlign='right';
+    ctx.fillText('ȳ', ML-3, py(my)+4);
+
+    // ── Axes
+    ctx.strokeStyle='#cbd5e1'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(ML,MT); ctx.lineTo(ML,MT+CH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ML,MT+CH); ctx.lineTo(ML+CW,MT+CH); ctx.stroke();
+
+    // ── Tick labels
+    ctx.fillStyle='#64748b'; ctx.font='10.5px Inter,system-ui,sans-serif'; ctx.textAlign='center';
+    xTicks.forEach(v=>ctx.fillText('Rp'+v.toFixed(1)+'T', px(v), MT+CH+15));
+    ctx.textAlign='right';
+    yTicks.forEach(v=>ctx.fillText('Rp'+v.toFixed(1)+'T', ML-6, py(v)+4));
+
+    // ── Axis titles
+    ctx.fillStyle='#475569'; ctx.font='11px Inter,system-ui,sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText('Net Income (Triliun Rp)', ML+CW/2, H-12);
+    ctx.save();
+    ctx.translate(14, MT+CH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Operating Cash Flow (Triliun Rp)', 0, 0);
+    ctx.restore();
+
+    // ── Trendline (animated: draws from left to right)
+    const trendAlpha = Math.min(prog*1.5, 1);
+    if (trendAlpha > 0) {
+      const tx1=X1, tx2=X1+(X2-X1)*trendAlpha;
+      const ty1=SLOPE*tx1+ICEPT, ty2=SLOPE*tx2+ICEPT;
+      ctx.strokeStyle=`rgba(37,99,235,${0.30*trendAlpha})`;
+      ctx.lineWidth=1.8; ctx.setLineDash([7,4]);
+      ctx.beginPath(); ctx.moveTo(px(tx1),py(ty1)); ctx.lineTo(px(tx2),py(ty2)); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Trendline label at end
+      if (trendAlpha > 0.95) {
+        const lx=px(tx2)+6, ly=py(ty2);
+        ctx.fillStyle='rgba(37,99,235,0.55)'; ctx.font='10px Inter,sans-serif'; ctx.textAlign='left';
+        ctx.fillText('trend', lx, ly+4);
+      }
+    }
+
+    // ── Dots (animated: pop in sequentially)
+    // Saat filter aktif: tampilkan semua tahun sebagai ghost, highlight tahun dipilih
+    const isFiltered = filterYear !== null;
+
+    // Ghost dots (semua titik, transparan) saat ada filter
+    if (isFiltered) {
+      ALL_SDATA.forEach(d => {
+        if (d.year === filterYear) return; // skip — akan digambar full di bawah
+        const cx = px(d.ni), cy = py(d.cfo);
+        ctx.save();
+        ctx.globalAlpha = 0.18;
+        ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2);
+        const eqrColor = d.eqr >= 1.8 ? '#059669' : d.eqr >= 1.4 ? '#2563EB' : '#f59e0b';
+        ctx.fillStyle = eqrColor;
+        ctx.fill();
+        ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+        ctx.restore();
+        // Ghost year label
+        ctx.fillStyle='rgba(71,85,105,0.3)'; ctx.font='9.5px Inter,sans-serif';
+        ctx.textAlign='center';
+        ctx.fillText(d.year, cx, cy-13);
+      });
+    }
+
+    SDATA.forEach((d, i) => {
+      const dotDelay = i / SDATA.length;
+      const dotProg  = Math.max(0, Math.min(1, (prog - dotDelay*0.6) / 0.4));
+      if (dotProg <= 0) return;
+
+      const cx=px(d.ni), cy=py(d.cfo);
+      const isHov = i === hoveredIdx;
+      const isSel = i === selectedIdx;
+      const isHighlight = isFiltered; // satu titik aktif → selalu highlight
+      const R = (isHov || isSel || isHighlight) ? 10 : 7;
+      const scale = easeOut(dotProg);
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(scale, scale);
+
+      // Halo for hovered/selected/highlighted
+      if (isHov || isSel || isHighlight) {
+        ctx.beginPath(); ctx.arc(0,0,R+6,0,Math.PI*2);
+        ctx.fillStyle = isSel ? 'rgba(37,99,235,0.22)' : isHighlight ? 'rgba(37,99,235,0.15)' : 'rgba(37,99,235,0.10)';
+        ctx.fill();
+      }
+
+      // Shadow
+      ctx.shadowColor='rgba(37,99,235,0.25)'; ctx.shadowBlur = (isHov||isHighlight) ? 16 : 8;
+
+      // Dot fill — color by EQR value
+      const eqrColor = d.eqr >= 1.8 ? '#059669' : d.eqr >= 1.4 ? '#2563EB' : '#f59e0b';
+      ctx.beginPath(); ctx.arc(0,0,R,0,Math.PI*2);
+      ctx.fillStyle = eqrColor;
+      ctx.fill();
+      ctx.strokeStyle='#fff'; ctx.lineWidth= (isSel||isHighlight) ? 2.5 : 1.8; ctx.shadowBlur=0; ctx.stroke();
+      ctx.restore();
+
+      // Year label
+      if (dotProg > 0.8) {
+        ctx.fillStyle = (isHov||isSel||isHighlight) ? '#1e40af' : '#475569';
+        ctx.font = (isHov||isSel||isHighlight) ? 'bold 11px Inter,sans-serif' : '10px Inter,sans-serif';
+        ctx.textAlign='center';
+        ctx.fillText(d.year, cx, cy-(R+6)*scale);
+      }
+    });
+
+    // ── r badge (inside chart, top-right)
+    // Saat filter 1 tahun: tampilkan EQR tahun tsb, bukan r korelasi
+    const BW=90, BH=24, BX=ML+CW-BW, BY=MT+2;
+    ctx.fillStyle='rgba(37,99,235,0.10)'; rrect(ctx,BX,BY,BW,BH,12); ctx.fill();
+    ctx.strokeStyle='rgba(37,99,235,0.28)'; ctx.lineWidth=1; rrect(ctx,BX,BY,BW,BH,12); ctx.stroke();
+    ctx.fillStyle='#1d4ed8'; ctx.font='bold 12px Inter,system-ui,sans-serif'; ctx.textAlign='center';
+    if (filterYear && SDATA.length === 1) {
+      ctx.fillText('EQR\u00a0=\u00a0'+SDATA[0].eqr.toFixed(2), BX+BW/2, BY+16);
+    } else {
+      ctx.fillText('r\u00a0=\u00a0'+CORR.toFixed(2), BX+BW/2, BY+16);
+    }
+
+    // ── EQR color legend (bottom-right)
+    const legendItems = [
+      {color:'#059669', label:'EQR ≥ 1.8'},
+      {color:'#2563EB', label:'EQR 1.4–1.8'},
+      {color:'#f59e0b', label:'EQR < 1.4'},
+    ];
+    let lx = ML+CW - 4;
+    const ly = MT+CH + 38;
+    ctx.textAlign='right';
+    [...legendItems].reverse().forEach(item => {
+      ctx.fillStyle='#64748b'; ctx.font='10px Inter,sans-serif';
+      ctx.fillText(item.label, lx, ly);
+      lx -= (ctx.measureText(item.label).width + 14);
+      ctx.beginPath(); ctx.arc(lx+6, ly-4, 5, 0, Math.PI*2);
+      ctx.fillStyle=item.color; ctx.fill();
+      lx -= 14;
+    });
+
+    ctx.restore();
+  }
+
+  // ── Entrance animation
+  function startAnimation() {
+    animProgress = 0;
+    if (animRAF) cancelAnimationFrame(animRAF);
+    const start = performance.now();
+    const DURATION = 900;
+    function step(now) {
+      const t = Math.min((now-start)/DURATION, 1);
+      animProgress = easeOut(t);
+      draw();
+      if (t < 1) animRAF = requestAnimationFrame(step);
+    }
+    animRAF = requestAnimationFrame(step);
+  }
+
+  // ── Tooltip
+  function showTooltip(idx, mouseX, mouseY) {
+    const tip = getTooltip(); const wrap = getWrap();
+    if (!tip || !wrap) return;
+    // Saat filtered, idx merujuk ke ALL_SDATA
+    const d = filterYear ? ALL_SDATA[idx] : SDATA[idx];
+    if (!d) return;
+    const eqrStr = d.eqr.toFixed(2) + 'x';
+    const eqrColor = d.eqr >= 1.8 ? '#34d399' : d.eqr >= 1.4 ? '#60a5fa' : '#fbbf24';
+    tip.innerHTML = `
+      <div style="font-weight:700;font-size:13px;margin-bottom:4px;color:#f1f5f9">${d.year}</div>
+      <div style="color:#94a3b8;font-size:11px;margin-bottom:6px">Annual Data</div>
+      <div style="display:flex;justify-content:space-between;gap:20px">
+        <span style="color:#94a3b8">Net Income</span>
+        <span style="font-weight:600;color:#e2e8f0">Rp ${d.ni.toFixed(2)} T</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;gap:20px">
+        <span style="color:#94a3b8">Op. Cash Flow</span>
+        <span style="font-weight:600;color:#e2e8f0">Rp ${d.cfo.toFixed(2)} T</span>
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,0.1);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;gap:20px">
+        <span style="color:#94a3b8">EQR</span>
+        <span style="font-weight:700;color:${eqrColor}">${eqrStr}</span>
+      </div>`;
+    tip.style.opacity = '1';
+
+    // Position tooltip — avoid overflow
+    const wRect = wrap.getBoundingClientRect();
+    const {W, H} = getDims();
+    let tx = mouseX + 14, ty = mouseY - 10;
+    if (tx + 180 > W) tx = mouseX - 194;
+    if (ty + 130 > H) ty = mouseY - 130;
+    tip.style.left = tx + 'px';
+    tip.style.top  = ty + 'px';
+  }
+
+  function hideTooltip() {
+    const tip = getTooltip();
+    if (tip) tip.style.opacity = '0';
+  }
+
+  // ── Mouse events
+  function bindEvents() {
+    const canvas = getCanvas();
+    if (!canvas) return;
+
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const {W, H} = getDims();
+      const idx = hitTest(mx, my, W, H);
+      if (idx !== hoveredIdx) {
+        hoveredIdx = idx;
+        canvas.style.cursor = idx >= 0 ? 'pointer' : 'crosshair';
+        draw();
+      }
+      if (idx >= 0) showTooltip(idx, mx, my);
+      else hideTooltip();
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      hoveredIdx = -1;
+      hideTooltip();
+      draw();
+    });
+
+    canvas.addEventListener('click', e => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const {W, H} = getDims();
+      const idx = hitTest(mx, my, W, H);
+      selectedIdx = (idx === selectedIdx) ? -1 : idx; // toggle
+      draw();
+    });
+  }
+
+  // ── Init & visibility trigger
+  function init() {
+    const page   = document.getElementById('page-penjualan');
+    const canvas = getCanvas();
+    if (!page || !canvas) return;
+
+    bindEvents();
+
+    function tryStart() {
+      if (!page.classList.contains('active-page')) return;
+      const {W, H} = getDims();
+      if (W < 10) return;
+      startAnimation();
+    }
+
+    const mo = new MutationObserver(tryStart);
+    mo.observe(page, {attributes:true, attributeFilter:['class']});
+
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => {
+        if (!page.classList.contains('hidden')) { lastW=0; draw(); }
+      });
+      const wrap = getWrap();
+      if (wrap) ro.observe(wrap);
+    }
+
+    tryStart();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+  window.addEventListener('resize', () => { lastW=0; draw(); });
+})();
 
 /* ══════════════════════════════════════════
    KPI DINAMIS — MARGIN TRENDS
@@ -740,24 +1291,21 @@ function renderMgKpiCard(item, data) {
   const periodEl = document.getElementById(item.periodId);
   if (!valEl) return;
 
-  // Update label dengan periode filter
   const tahun   = data.filter?.tahun;
   const kuartal = data.filter?.kuartal;
+  const isAllYears = !tahun; // "All Years" = tidak ada tahun terpilih
+
+  // Update label dengan periode filter
   const periodeStr = tahun
     ? (kuartal ? `${item.baseLabel} ${kuartal} ${tahun}` : `${item.baseLabel} FY${tahun}`)
     : item.baseLabel;
   if (labelEl) labelEl.textContent = periodeStr;
 
-  // Update period comparison label
-  const periodLabel = tahun
-    ? (kuartal ? `vs ${kuartal} ${tahun - 1}` : `vs FY${tahun - 1}`)
-    : 'vs last year';
-  if (periodEl) periodEl.textContent = periodLabel;
-
   // Tidak ada data
   if (!data.ada_data || !data[item.key]) {
     valEl.innerHTML = '— <span style="font-size:18px; font-weight:500; color:var(--text-secondary)">%</span>';
-    if (badgeEl) { badgeEl.textContent = '—'; badgeEl.className = 'kpi-badge'; }
+    if (badgeEl)  { badgeEl.textContent = '—'; badgeEl.className = 'kpi-badge'; badgeEl.style.display = ''; }
+    if (periodEl) periodEl.style.display = '';
     return;
   }
 
@@ -771,17 +1319,25 @@ function renderMgKpiCard(item, data) {
     valEl.classList.remove('kpi-updating');
   }, 180);
 
-  // Render badge delta (dalam pp = percentage points)
-  if (badgeEl) {
-    if (d.delta !== null && d.delta !== undefined) {
-      const naik = d.delta >= 0;
-      const deltaStr = d.delta_fmt || `${naik ? '+' : ''}${Number(d.delta).toFixed(1)} pp`;
-      badgeEl.innerHTML = `${naik ? '↗' : '↘'} ${deltaStr}`;
-      badgeEl.className = 'kpi-badge ' + (naik ? 'up' : 'down');
-    } else {
-      badgeEl.textContent = 'base year';
-      badgeEl.className   = 'kpi-badge';
+  if (isAllYears) {
+    // "All Years" dipilih → tidak ada basis perbandingan, sembunyikan badge & label periode
+    if (badgeEl)  badgeEl.style.display  = 'none';
+    if (periodEl) periodEl.style.display = 'none';
+  } else if (d.delta !== null && d.delta !== undefined) {
+    const naik = d.delta >= 0;
+    const deltaStr = d.delta_fmt || `${naik ? '+' : ''}${Number(d.delta).toFixed(1)} pp`;
+    if (badgeEl) {
+      badgeEl.innerHTML     = `${naik ? '↗' : '↘'} ${deltaStr}`;
+      badgeEl.className     = 'kpi-badge ' + (naik ? 'up' : 'down');
+      badgeEl.style.display = '';
     }
+    if (periodEl) {
+      periodEl.textContent   = kuartal ? `vs ${kuartal} ${tahun - 1}` : `vs FY${tahun - 1}`;
+      periodEl.style.display = '';
+    }
+  } else {
+    if (badgeEl)  { badgeEl.textContent = 'base year'; badgeEl.className = 'kpi-badge'; badgeEl.style.display = ''; }
+    if (periodEl) periodEl.style.display = '';
   }
 }
 
@@ -883,7 +1439,7 @@ function renderBsKpiCard(item, data) {
   valEl.classList.add('kpi-updating');
   setTimeout(() => {
     const nilaiText = (d.nilai !== null && d.nilai !== undefined) ? d.nilai : '—';
-    const unitSpan  = String(nilaiText).includes('M') || String(nilaiText).includes('Jt')
+    const unitSpan  = String(nilaiText).includes('T') || String(nilaiText).includes('—')
       ? '' : '<span class="kpi-unit"> T</span>';
     valEl.innerHTML = `${item.prefix}${nilaiText}${unitSpan}`;
     valEl.classList.remove('kpi-updating');
@@ -955,8 +1511,8 @@ function updateBalanceCharts() {
   const params = new URLSearchParams();
   const y = document.getElementById('bs-yearFilter')?.value;
   const q = document.getElementById('bs-quarterFilter')?.value;
-  if (y) params.set('year',    y);
-  if (q) params.set('quarter', q);
+  if (y) params.set('Year',    y);
+  if (q) params.set('Quarter', q);
   const qs = params.toString();
 
   Object.entries(BS_BASES).forEach(([id, base]) => {
@@ -1115,11 +1671,6 @@ if (notifBtn && notifPanel) {
 }
 
 
-/* ══════════════════════════════════════════
-   BAGIAN BARU: INPUT DATA + POLLING NOTIF
-   ══════════════════════════════════════════ */
-
-// API_BASE = 'http://localhost:5000' (dideklarasikan di atas)
 
 /* ── MODAL LOGIC ── */
 (function () {
@@ -1275,7 +1826,7 @@ if (notifBtn && notifPanel) {
        Memaksa Metabase render ulang query dari DB, bukan dari cache browser. */
     [
       /* Financial Overview */
-      'keu-chart1', 'keu-chart2', 'keu-chart3',
+      'keu-chart1', 'keu-chart2',
       /* Resource Overview */
       'ops-chart1', 'ops-chart2', 'ops-chart3', 'ops-chart4',
       /* Cash Flow Health */
@@ -1310,7 +1861,14 @@ if (notifBtn && notifPanel) {
       setTimeout(() => { iframe.src = freshUrl; }, 80);
     });
 
-    /* 3. Populate ulang dropdown tahun jika ada data tahun baru */
+    /* 3. Refresh tabel ringkasan keuangan custom */
+    if (typeof renderKeuTable === 'function') {
+      const y = document.getElementById('keu-yearFilter')?.value || '';
+      const q = document.getElementById('keu-quarterFilter')?.value || '';
+      renderKeuTable(y, q);
+    }
+
+    /* 4. Populate ulang dropdown tahun jika ada data tahun baru */
     if (typeof populateTahunFilter === 'function') populateTahunFilter();
   }
   window.refreshDashboard = refreshDashboard;
@@ -1889,9 +2447,9 @@ setInterval(pollNotifikasi, 30_000);
 
 // Map: id elemen → key dari API response
 const KPI_MAP = [
-  { valId: 'kpi-ocf',       badgeId: 'kpi-ocf-badge',       key: 'ocf',  prefix: 'Rp ' },
-  { valId: 'kpi-net-income', badgeId: 'kpi-net-income-badge', key: 'net',  prefix: 'Rp ' },
-  { valId: 'kpi-fcf',       badgeId: 'kpi-fcf-badge',       key: 'fcf',  prefix: 'Rp ' },
+  { valId: 'kpi-ocf',        badgeId: 'kpi-ocf-badge',        periodId: 'kpi-ocf-period',        key: 'ocf',  prefix: 'Rp ' },
+  { valId: 'kpi-net-income', badgeId: 'kpi-net-income-badge', periodId: 'kpi-net-income-period', key: 'net',  prefix: 'Rp ' },
+  { valId: 'kpi-fcf',        badgeId: 'kpi-fcf-badge',        periodId: 'kpi-fcf-period',        key: 'fcf',  prefix: 'Rp ' },
 ];
 
 // Auto-populate semua <select> filter tahun dari database
@@ -1925,16 +2483,21 @@ function setKpiLoading() {
   });
 }
 
-function renderKpiCard({ valId, badgeId, key, prefix }, data) {
-  const valEl   = document.getElementById(valId);
-  const badgeEl = document.getElementById(badgeId);
+function renderKpiCard({ valId, badgeId, periodId, key, prefix }, data) {
+  const valEl    = document.getElementById(valId);
+  const badgeEl  = document.getElementById(badgeId);
+  const periodEl = periodId ? document.getElementById(periodId) : null;
   if (!valEl || !badgeEl) return;
+
+  const isAllYears = !data.filter?.tahun; // "All Years" = tidak ada tahun terpilih
 
   // Cek ada_data dan key ada di response
   if (!data.ada_data || !data[key] || data[key].nilai === undefined || data[key].nilai === null) {
     valEl.innerHTML     = '<span class="kpi-loading">—</span>';
     badgeEl.textContent = '—';
     badgeEl.className   = 'kpi-badge';
+    badgeEl.style.display  = '';
+    if (periodEl) periodEl.style.display = '';
     return;
   }
 
@@ -1949,14 +2512,26 @@ function renderKpiCard({ valId, badgeId, key, prefix }, data) {
     valEl.classList.remove('kpi-updating');
   }, 180);
 
-  // Badge YoY %
-  if (d.pct !== null && d.pct !== undefined) {
+  if (isAllYears) {
+    // "All Years" dipilih → tidak ada basis perbandingan, sembunyikan badge & label periode
+    badgeEl.style.display = 'none';
+    if (periodEl) periodEl.style.display = 'none';
+  } else if (d.pct !== null && d.pct !== undefined) {
     const naik = d.pct >= 0;
-    badgeEl.innerHTML = `${naik ? '↑ +' : '↓ '}${Math.abs(d.pct)}%`;
-    badgeEl.className = 'kpi-badge ' + (naik ? 'up' : 'down');
+    badgeEl.innerHTML     = `${naik ? '↑ +' : '↓ '}${Math.abs(d.pct)}%`;
+    badgeEl.className     = 'kpi-badge ' + (naik ? 'up' : 'down');
+    badgeEl.style.display = '';
+    if (periodEl) {
+      const tahun   = data.filter?.tahun;
+      const kuartal = data.filter?.kuartal;
+      periodEl.textContent = kuartal ? `vs ${kuartal} ${tahun - 1}` : 'vs last year';
+      periodEl.style.display = '';
+    }
   } else {
-    badgeEl.textContent = 'base year';
-    badgeEl.className   = 'kpi-badge';
+    badgeEl.textContent    = 'base year';
+    badgeEl.className      = 'kpi-badge';
+    badgeEl.style.display  = '';
+    if (periodEl) periodEl.style.display = '';
   }
 
   // Update trend icon di card
@@ -1969,17 +2544,10 @@ function renderKpiCard({ valId, badgeId, key, prefix }, data) {
 
 function renderKpi(data) {
   KPI_MAP.forEach(item => renderKpiCard(item, data));
-
-  // Update label periode di bawah badge
-  const tahun   = data.filter?.tahun;
-  const kuartal = data.filter?.kuartal;
-  const label   = tahun
-    ? (kuartal ? `${kuartal} ${tahun} vs ${kuartal} ${tahun - 1}` : `Full Year ${tahun} vs ${tahun - 1}`)
-    : 'All Years';
-
-  document.querySelectorAll('.kpi-period').forEach(el => {
-    el.textContent = tahun ? label : 'vs last year';
-  });
+  // Catatan: label "vs last year" / "vs Qn Tahun-1" per-card sudah ditangani
+  // langsung di dalam renderKpiCard (termasuk sembunyikan saat All Years dipilih).
+  // Tidak lagi memakai querySelectorAll('.kpi-period') global agar tidak menimpa
+  // label periode milik page lain (Operasional, Balance Sheet, KFI, dll).
 }
 
 async function updateKPI() {
@@ -2029,6 +2597,7 @@ if (_keuQGroup) {
 
   // Fire semua KPI sekaligus
   updateKPI();
+  renderKeuTable('', '');  // Tabel ringkasan keuangan
   updateKpiOps();
   updateKpiPCQ();
   updateKpiBalance();
@@ -2163,6 +2732,12 @@ function renderKfiKpiCard(item, data) {
   }
 }
 
+/* ── URL base Metabase untuk chart KFI ── */
+const KFI_CHARTS = {
+  "kfi-chart-dividen": "http://localhost:3000/public/question/a71cbf60-cfe4-4a8d-ab98-953197c4dccf?titled=false",
+  "kfi-chart-returns": "http://localhost:3000/public/question/61a66e12-6222-4004-b731-f812c1192521?titled=false",
+};
+
 async function updateKfiKpi() {
   const tahun   = document.getElementById('kfi-yearFilter')?.value;
   const kuartal = document.getElementById('kfi-quarterFilter')?.value;
@@ -2178,6 +2753,19 @@ async function updateKfiKpi() {
     else if (tahun)        showEl.textContent = `FY ${tahun}`;
     else                   showEl.textContent = 'All Years';
   }
+
+  // ── Update Metabase iframe charts ──
+  // Metabase public URL menerima parameter year & quarter via query string
+  // yang dikonfigurasi sebagai filter di sisi Metabase query.
+  const mbParams = new URLSearchParams();
+  if (tahun)   mbParams.set('year',    tahun);
+  if (kuartal) mbParams.set('quarter', kuartal);
+  const mbQs = mbParams.toString();
+
+  Object.entries(KFI_CHARTS).forEach(([id, baseUrl]) => {
+    const el = document.getElementById(id);
+    if (el) el.src = mbQs ? `${baseUrl}&${mbQs}` : baseUrl;
+  });
 
   try {
     const res  = await fetch(`${API_BASE}/api/kpi/kfi?${params}`);
@@ -2256,6 +2844,13 @@ function insightUpdateBadge(page) {
   const badge = document.getElementById('insightFabBadge');
   if (!fab || !badge) return;
 
+  // Hanya manajemen yang boleh lihat FAB — exit early untuk role lain
+  if (currentRole !== 'manajemen') {
+    fab.style.display  = 'none';
+    badge.style.display = 'none';
+    return;
+  }
+
   const count = insightGetByPage(page).length;
   if (count > 0) {
     badge.textContent    = count;
@@ -2276,8 +2871,8 @@ function insightUpdateForPage(page) {
   const fab = document.getElementById('insightFab');
   if (!fab) return;
 
-  // Tampil HANYA di halaman dashboard & hanya untuk admin
-  if (currentRole === 'admin' && INSIGHT_ALLOWED_PAGES.has(page)) {
+  // Tampil di halaman dashboard HANYA untuk manajemen
+  if (currentRole === 'manajemen' && INSIGHT_ALLOWED_PAGES.has(page)) {
     fab.style.display = 'flex';
   } else {
     fab.style.display = 'none';
@@ -2569,7 +3164,8 @@ function bannerGetForPage(page) {
 /* ── Render banners in #bannerArea ── */
 function renderBannerArea(page) {
   const area = document.getElementById('bannerArea');
-  if (!area || !page || page === 'home') {
+  const BANNER_EXCLUDED_PAGES = new Set(['home', 'profile', 'admin']);
+  if (!area || !page || BANNER_EXCLUDED_PAGES.has(page)) {
     if (area) area.style.display = 'none';
     return;
   }
@@ -3653,7 +4249,7 @@ function toggleSidebar() {
     });
     // Set role otomatis dari tab yang dipilih di modal login
     const roleEl = getEl('regRole');
-    if (roleEl) roleEl.value = selectedLoginRole || 'user';
+    if (roleEl) roleEl.value = selectedLoginRole || 'manajemen';
     hideError('regError1'); hideError('regError2');
     getEl('regSuccess').style.display = 'none';
     goToStep(1);
@@ -3698,7 +4294,7 @@ function toggleSidebar() {
     const lastName  = (getEl('regLastName')?.value  || '').trim();
     const email     = (getEl('regEmail')?.value     || '').trim();
     // Role diambil dari hidden input yang sudah di-set otomatis saat modal dibuka
-    const role      = getEl('regRole')?.value || selectedLoginRole || 'user';
+    const role      = getEl('regRole')?.value || selectedLoginRole || 'manajemen';
 
     if (!firstName) return showError('regError2','regError2Msg','Nama depan wajib diisi.');
 
