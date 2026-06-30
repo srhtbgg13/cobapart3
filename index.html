@@ -10,7 +10,8 @@
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="login-modal-backdrop" id="loginModalBackdrop">
   <div class="login-modal" id="loginModal">
-    <!-- Modal Header -->
+
+    <!-- HEADER -->
     <div class="login-modal-header">
       <div class="login-modal-logo">
         <img src="sidebar-tiga-roda.jpg" alt="PT Indocement"
@@ -30,7 +31,7 @@
       </div>
     </div>
 
-    <!-- Role Tabs -->
+    <!-- TAB MEMILIH AKTOR -->
     <div class="login-role-tabs">
       <button class="login-role-tab active" data-role="admin" id="tabAdmin">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -38,17 +39,30 @@
         </svg>
         Admin
       </button>
-      <button class="login-role-tab" data-role="user" id="tabUser">
+
+      <button class="login-role-tab" data-role="manajemen" id="tabUser">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
         </svg>
-        User
+        Manajemen
+      </button>
+
+      <button class="login-role-tab" data-role="guest" id="tabGuest">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        <span class="tab-label-main">Publik</span>
+        <span class="tab-label-sub">Tanpa akun</span>
       </button>
     </div>
 
-    <!-- Form -->
-    <div class="login-modal-body">
+    <!-- FORM ISI DATA AKTOR -->
+    <div class="login-modal-body" id="loginFormBody">
       <div class="login-field">
         <label for="loginUsername">Username</label>
         <div class="login-input-wrap">
@@ -59,6 +73,7 @@
           <input type="text" id="loginUsername" placeholder="Masukkan username" autocomplete="username">
         </div>
       </div>
+
       <div class="login-field">
         <label for="loginPassword">Password</label>
         <div class="login-input-wrap">
@@ -76,7 +91,7 @@
         </div>
       </div>
 
-      <!-- Error message -->
+      <!-- PESAN ERROR -->
       <div class="login-error" id="loginError" style="display:none">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -93,17 +108,21 @@
         </span>
       </button>
 
-      <!-- Guest login — hanya tampil di tab User -->
-      <div class="login-guest-divider" id="loginGuestDivider" style="display:none">
-        <span>atau</span>
-      </div>
-      <button class="login-guest-btn" id="loginGuestBtn" style="display:none" onclick="loginAsGuest()">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="12" cy="8" r="4"/>
-          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-          <line x1="17" y1="11" x2="21" y2="11"/>
+    </div>
+
+    <!-- PANEL GUEST (tampil saat tab Publik aktif) -->
+    <div class="login-modal-body" id="loginGuestPanel" style="display:none">
+      <div class="guest-info-box">
+        <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="color:var(--accent-blue,#3b82f6);margin-bottom:8px">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
         </svg>
-        Lanjutkan tanpa akun
+        <p class="guest-info-title">Akses Data Publik</p>
+        <p class="guest-info-desc">Data keuangan PT Indocement bersifat <strong>open data</strong>. Anda dapat melihat dashboard tanpa perlu memiliki akun.</p>
+      </div>
+      <button class="login-submit-btn" onclick="loginAsGuest()">
+        Masuk sebagai Tamu
       </button>
     </div>
 
@@ -115,18 +134,18 @@
         </svg>
         Hubungi administrator untuk mendapatkan akses
       </span>
-      <div class="login-register-link">
+      <div class="login-register-link" id="loginRegisterLink">
         Belum punya akun? <button type="button" onclick="openRegisterModal()">Daftar Sekarang</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ══ REGISTER MODAL ══ -->
+<!-- REGIST AKUN AKTOR -->
 <div class="login-modal-backdrop" id="registerModalBackdrop">
   <div class="login-modal register-modal">
 
-    <!-- Header -->
+    <!-- HEADER -->
     <div class="login-modal-header">
       <div class="login-modal-logo">
         <img src="sidebar-tiga-roda.jpg" alt="PT Indocement"
@@ -146,7 +165,7 @@
       </div>
     </div>
 
-    <!-- Step indicator -->
+    <!-- STEP INDICATOR -->
     <div class="reg-steps">
       <div class="reg-step active" id="regStep1Dot">
         <div class="reg-step-circle">1</div>
@@ -161,8 +180,7 @@
 
     <!-- Body -->
     <div class="login-modal-body">
-
-      <!-- Step 1: Info Akun -->
+      <!-- BAG I: Info Akun -->
       <div id="regFormStep1">
         <div class="login-field">
           <label>Username <span class="req">*</span></label>
@@ -260,7 +278,7 @@
           </p>
         </div>
         <!-- Role ditentukan otomatis dari tab Login yang dipilih -->
-        <input type="hidden" id="regRole" value="user">
+        <input type="hidden" id="regRole" value="manajemen">
 
         <div class="login-error" id="regError2" style="display:none">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -502,7 +520,7 @@
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
           <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
         </svg>
-        <span class="notif-badge">3</span>
+        <span class="notif-badge" id="notifBadge" style="display:none">0</span>
       </button>
 
       <!-- Profile + Dropdown — paling kanan -->
@@ -518,7 +536,7 @@
 
         <!-- Profile Dropdown -->
         <div class="profile-dropdown" id="profileDropdown">
-          <div class="profile-dropdown-item" onclick="openProfilePage()">
+          <div class="profile-dropdown-item" id="ddProfil" onclick="openProfilePage()">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
               <circle cx="12" cy="7" r="4"/>
@@ -615,7 +633,7 @@
 
         <p class="hp-desc">
           Platform analisis keuangan komprehensif untuk monitoring performa Free
-          Cash Flow, profitabilitas, dan kesehatan finansial perusahaan secara real-time.
+          Cash Flow, profitabilitas, dan kesehatan finansial perusahaan.
         </p>
 
         <div class="hp-cta-group">
@@ -664,7 +682,7 @@
     <div class="page-header-row">
       <div>
         <h2 class="page-section-title">Financial Overview</h2>
-        <p class="page-section-sub">Monitor your free cash flow performance and trends</p>
+        <p class="page-section-sub">Monitor operating cash flow and financial performance trends</p>
       </div>
     </div>
 
@@ -722,7 +740,7 @@
         <div class="kpi-value" id="kpi-ocf">Rp 3.81 <span class="kpi-unit">T</span></div>
         <div class="kpi-footer">
           <span class="kpi-badge up" id="kpi-ocf-badge">↑ +13.74%</span>
-          <span class="kpi-period">vs last year</span>
+          <span class="kpi-period" id="kpi-ocf-period">vs last year</span>
         </div>
       </div>
 
@@ -738,7 +756,7 @@
         <div class="kpi-value" id="kpi-net-income">Rp 2.25 <span class="kpi-unit">T</span></div>
         <div class="kpi-footer">
           <span class="kpi-badge up" id="kpi-net-income-badge">↑ +11.99%</span>
-          <span class="kpi-period">vs last year</span>
+          <span class="kpi-period" id="kpi-net-income-period">vs last year</span>
         </div>
       </div>
 
@@ -755,7 +773,7 @@
         <div class="kpi-value" id="kpi-fcf">Rp 3.20<span class="kpi-unit"> T</span></div>
         <div class="kpi-footer">
           <span class="kpi-badge up" id="kpi-fcf-badge">↑ +10.97%</span>
-          <span class="kpi-period">vs last year</span>
+          <span class="kpi-period" id="kpi-fcf-period">vs last year</span>
         </div>
       </div>
     </div>
@@ -765,10 +783,10 @@
       <div class="chart-card">
         <div class="chart-header">
           <div>
-            <div class="chart-title">Operating Cash Flow (10-Year Trend)</div>
-            <div class="chart-subtitle">Tren CFO tahunan 2016–2025</div>
+            <div class="chart-title">Operating Cash Flow Trend</div>
+            <div class="chart-subtitle">Cash Flow from Operations (CFO) Trend by Selected Period</div>
           </div>
-          <span class="chart-badge">10 Tahun</span>
+          <!-- <span class="chart-badge">10 Tahun</span> -->
         </div>
         <div class="chart-body">
           <iframe id="keu-chart1"
@@ -779,10 +797,10 @@
       <div class="chart-card">
         <div class="chart-header">
           <div>
-            <div class="chart-title">Net Income vs OCF</div>
-            <div class="chart-subtitle">Perbandingan Net Income dan Operating Cash Flow</div>
+            <div class="chart-title">Net Income vs. Operating Cash Flow</div>
+            <div class="chart-subtitle">Comparative Analysis of Net Income and Operating</div>
           </div>
-          <span class="chart-badge">Komparasi</span>
+          <!-- <span class="chart-badge">Komparasi</span> -->
         </div>
         <div class="chart-body">
           <iframe id="keu-chart2"
@@ -797,13 +815,26 @@
       <div class="table-header">
         <div class="left">
           <h2>Financial Summary Table</h2>
-          <p>Ringkasan data keuangan berdasarkan filter yang dipilih</p>
+          <p>Consolidated financial information based on the selected filters and reporting period.</p>
         </div>
       </div>
-      <div class="table-body">
-        <iframe id="keu-chart3"
-          src="http://localhost:3000/public/question/36fff35d-3860-4642-979e-9fe40cca46aa?titled=false"
-          frameborder="0"></iframe>
+      <div class="table-body keu-summary-table-wrap">
+        <table class="keu-summary-table" id="keu-summary-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Quarter</th>
+              <th>OCF</th>
+              <th>Net Income</th>
+              <th>FCF</th>
+              <th>Current Ratio</th>
+            </tr>
+          </thead>
+          <tbody id="keu-summary-tbody">
+            <tr><td colspan="6" class="keu-table-loading">· · ·</td></tr>
+          </tbody>
+        </table>
+        <div class="keu-table-footer" id="keu-table-rowcount"></div>
       </div>
     </div>
 
@@ -816,7 +847,7 @@
     <div class="page-header-row">
       <div>
         <h2 class="page-section-title">Resource Overview</h2>
-        <p class="page-section-sub">Cash flow activity breakdown and operational metrics</p>
+        <p class="page-section-sub">Breakdown of operating, investing, and financing cash flow activities</p>
       </div>
     </div>
 
@@ -862,21 +893,17 @@
     <!-- KPI Row: 5 cards dengan desain seragam -->
     <div class="kpi-grid kpi-5">
 
-      <!-- % Operating Contribution -->
-      <div class="kpi-card kpi-sparkcard kpi-sparkcard-red">
-        <div class="spark-top">
-          <div class="kpi-icon-wrap" style="background:#C0392B">
-            <svg fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24">
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
-          </div>
+      <!-- % Operating Contribution — FEATURED -->
+      <div class="kpi-card kpi-oc-featured">
+        <div class="kpi-oc-toprow">
+          <span class="kpi-oc-keybadge">
+            <span class="kpi-oc-dot"></span>KEY METRIC
+          </span>
+          <span class="kpi-badge up kpi-oc-changebadge" id="ops-kpi-operating-badge">—</span>
         </div>
-        <div class="kpi-label" style="margin-top:10px">% Operating Contribution</div>
-        <div class="kpi-value kpi-val-red" id="ops-kpi-operating">· · ·</div>
-        <div class="kpi-footer">
-          <span class="kpi-badge up" id="ops-kpi-operating-badge">—</span>
-          <span class="kpi-period" id="ops-kpi-period-1">vs last year</span>
-        </div>
+        <div class="kpi-oc-label">% Operating Contribution</div>
+        <div class="kpi-oc-value" id="ops-kpi-operating">· · ·</div>
+        <div class="kpi-oc-period" id="ops-kpi-period-1">vs last year</div>
       </div>
 
       <!-- % Investing Contribution -->
@@ -976,8 +1003,8 @@
       <div class="chart-card">
         <div class="chart-header">
           <div>
-            <div class="chart-title">Operating Cash Flow (10-Year Trend)</div>
-            <div class="chart-subtitle">Tren CFO tahunan 2016–2025</div>
+            <div class="chart-title">Operating Cash Flow Trend</div>
+            <div class="chart-subtitle">Cash Flow from Operations (CFO) Trend by Selected Period</div>
           </div>
         </div>
         <div class="chart-body">
@@ -1074,11 +1101,11 @@
     </div>
 
     <!-- Top Row -->
-    <div class="charts-row" style="grid-template-columns: 340px 1fr;">
-      <div class="chart-card" style="justify-content: flex-start;">
+    <div class="charts-row" style="grid-template-columns: 340px 1fr; height: 420px; align-items: stretch;">
+      <div class="chart-card" style="height:100%; justify-content: flex-start; overflow:hidden;">
         <div class="chart-header">
           <div>
-            <div class="chart-title">Earnings Quality Ratio (EQR)</div>
+            <div class="chart-title">Cash Flow to Earnings Ratio</div>
             <div class="chart-subtitle">Rasio kualitas laba terhadap arus kas</div>
           </div>
           <div class="kpi-icon-wrap" style="background:#EFF6FF">
@@ -1093,7 +1120,7 @@
             <span id="pcq-kpi-eqr" style="font-size:52px; font-weight:800; color:#2563EB; letter-spacing:-2px; line-height:1;">· · ·</span>
             <span style="font-size:22px; color:#6B7280; font-weight:500;">×</span>
           </div>
-          <div style="display:flex; align-items:center; gap:6px;">
+          <div style="display:flex; align-items:center; gap:6px; min-height:24px;">
             <span class="kpi-badge up" id="pcq-kpi-eqr-badge">—</span>
           </div>
           <div style="border-top:1px solid #E5E7EB; padding-top:16px; display:flex; flex-direction:column; gap:10px;">
@@ -1114,49 +1141,75 @@
         </div>
       </div>
 
-      <div class="chart-card">
+      <div class="chart-card" style="height:100%; overflow:hidden; display:flex; flex-direction:column;">
         <div class="chart-header">
           <div>
-            <div class="chart-title">Net Income vs Operating Cash Flow</div>
-            <div class="chart-subtitle">Perbandingan tren laba bersih dan arus kas operasional</div>
+            <div class="chart-title">Scatter Plot: Net Income vs Operating Cash Flow</div>
+            <div class="chart-subtitle">Hover titik untuk detail · Klik untuk highlight · 2016–2025</div>
           </div>
+          <span class="chart-badge scatter-r-badge" id="pcq-scatter-rbadge">r = 0.53</span>
         </div>
-        <div class="chart-body">
-          <iframe id="pcq-chart1"
-            src="http://localhost:3000/public/question/9cfdc768-ee6f-4e39-8044-a59785117ea7"
-            frameborder="0"></iframe>
+        <div class="chart-body" id="pcq-scatter-wrap" style="padding:0;overflow:hidden;flex:1;position:relative;">
+          <canvas id="pcq-scatter-canvas" style="display:block;cursor:crosshair;width:100%;height:100%;"></canvas>
+          <div id="pcq-scatter-tooltip" style="
+            position:absolute;pointer-events:none;opacity:0;transition:opacity 0.15s;
+            background:#1e293b;color:#f1f5f9;border-radius:10px;padding:10px 14px;
+            font-size:12.5px;line-height:1.7;box-shadow:0 4px 20px rgba(0,0,0,0.25);
+            border:1px solid rgba(255,255,255,0.1);min-width:160px;z-index:10;
+          "></div>
         </div>
       </div>
     </div>
 
-    <!-- Bottom Row: Scatter Plot + Table (2 kolom, tata letak asli) -->
-    <div class="charts-row">
-      <div class="chart-card">
-        <div class="chart-header">
-          <div>
-            <div class="chart-title">Scatter Plot: Laba vs Kas</div>
-            <div class="chart-subtitle">Analisis korelasi antara laba bersih dan arus kas operasional</div>
-          </div>
-          <span class="chart-badge">Korelasi</span>
-        </div>
-        <div class="chart-body chart-body-tall">
-          <iframe id="pcq-chart2"
-            src="http://localhost:3000/public/question/b6d3f75f-1cf6-467d-babc-0ec7aa3fbf05"
-            frameborder="0"></iframe>
-        </div>
-      </div>
-
-      <div class="chart-card">
+    <!-- Bottom Row: Table + EQR Trend -->
+    <div class="charts-row" style="grid-template-columns: 1fr 1fr; height: 460px; align-items: stretch;">
+      <div class="chart-card" style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
         <div class="chart-header">
           <div>
             <div class="chart-title">Table: Laba vs Kas per Tahun</div>
             <div class="chart-subtitle">Data historis dan rasio EQR</div>
           </div>
         </div>
-        <div class="chart-body chart-body-tall">
-          <iframe id="pcq-chart3"
+        <div class="chart-body-fill pcq-table-frame" style="position:relative; overflow:hidden;">
+          <div class="iframe-loading-placeholder" id="pcq-table-placeholder">
+            <svg width="32" height="32" fill="none" stroke="#CBD5E1" stroke-width="1.5" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/>
+              <line x1="3" y1="15" x2="21" y2="15"/>
+              <line x1="9" y1="9" x2="9" y2="21"/>
+            </svg>
+            <span>Menghubungkan ke Metabase…</span>
+          </div>
+          <iframe id="pcq-chart-table-laba"
             src="http://localhost:3000/public/question/294812b0-f504-400d-9709-9b8e188a2a3a?titled=false"
-            frameborder="0"></iframe>
+            frameborder="0"
+            onload="this.style.opacity='1'; document.getElementById('pcq-table-placeholder').style.display='none';"
+            onerror="document.getElementById('pcq-table-placeholder').innerHTML='<svg width=\'28\' height=\'28\' fill=\'none\' stroke=\'#FCA5A5\' stroke-width=\'1.5\' viewBox=\'0 0 24 24\'><circle cx=\'12\' cy=\'12\' r=\'10\'/><line x1=\'12\' y1=\'8\' x2=\'12\' y2=\'12\'/><line x1=\'12\' y1=\'16\' x2=\'12.01\' y2=\'16\'/></svg><span style=\'color:#EF4444\'>Koneksi Metabase tidak tersedia</span><small>Pastikan Metabase berjalan di localhost:3000</small>';"
+          ></iframe>
+        </div>
+      </div>
+
+      <div class="chart-card" style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Trend Cash Flow to Earnings Ratio</div>
+            <div class="chart-subtitle">Trend Cash Flow to Earnings Ratio · 2016–2025</div>
+          </div>
+        </div>
+        <div class="chart-body-fill pcq-eqr-frame" style="position:relative; overflow:hidden;">
+          <div class="iframe-loading-placeholder" id="pcq-eqr-placeholder">
+            <svg width="32" height="32" fill="none" stroke="#CBD5E1" stroke-width="1.5" viewBox="0 0 24 24">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+              <polyline points="16 7 22 7 22 13"/>
+            </svg>
+            <span>Menghubungkan ke Metabase…</span>
+          </div>
+          <iframe id="pcq-chart-eqr-trend"
+            src="http://localhost:3000/public/question/d9e197ac-9786-4707-b8dd-be6242b5725c?titled=false"
+            frameborder="0"
+            onload="this.style.opacity='1'; document.getElementById('pcq-eqr-placeholder').style.display='none';"
+            onerror="document.getElementById('pcq-eqr-placeholder').innerHTML='<svg width=\'28\' height=\'28\' fill=\'none\' stroke=\'#FCA5A5\' stroke-width=\'1.5\' viewBox=\'0 0 24 24\'><circle cx=\'12\' cy=\'12\' r=\'10\'/><line x1=\'12\' y1=\'8\' x2=\'12\' y2=\'12\'/><line x1=\'12\' y1=\'16\' x2=\'12.01\' y2=\'16\'/></svg><span style=\'color:#EF4444\'>Koneksi Metabase tidak tersedia</span><small>Pastikan Metabase berjalan di localhost:3000</small>';"
+          ></iframe>
         </div>
       </div>
     </div>
@@ -1322,11 +1375,11 @@
         <div class="chart-header">
           <div>
             <div class="chart-title">Annual Margin Trend</div>
-            <div class="chart-subtitle">Year-over-year margin performance (2020–2025)</div>
+            <div class="chart-subtitle">Year-over-year margin performance</div>
           </div>
           <span class="kpi-badge" style="font-size:12px; padding:5px 10px; background:#F5F3FF; color:#7C3AED; border:1px solid #DDD6FE;">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            Historical + Projection
+            <!-- <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> -->
+           
           </span>
         </div>
         <div class="chart-body">
@@ -1346,7 +1399,7 @@
             <div class="chart-title">Margin Summary (YoY)</div>
             <div class="chart-subtitle">Year-over-year margin comparison</div>
           </div>
-          <span class="kpi-badge up" style="font-size:12px; padding:5px 10px;">↗ Overall Growth</span>
+          <!-- <span class="kpi-badge up" style="font-size:12px; padding:5px 10px;">↗ Overall Growth</span> -->
         </div>
         <div class="chart-body chart-body-table">
           <iframe
@@ -1424,7 +1477,7 @@
             </svg>
           </div>
         </div>
-        <div class="kpi-label">Total Aset</div>
+        <div class="kpi-label">Total Assets</div>
         <div class="kpi-value" id="bs-kpi-assets-val">Rp · · · <span class="kpi-unit">T</span></div>
         <div class="kpi-footer">
           <span class="kpi-badge" id="bs-kpi-assets-badge">—</span>
@@ -1443,7 +1496,7 @@
             </svg>
           </div>
         </div>
-        <div class="kpi-label">Total Ekuitas</div>
+        <div class="kpi-label">Total Equity</div>
         <div class="kpi-value" id="bs-kpi-equity-val">Rp · · · <span class="kpi-unit">T</span></div>
         <div class="kpi-footer">
           <span class="kpi-badge" id="bs-kpi-equity-badge">—</span>
@@ -1462,7 +1515,7 @@
             </svg>
           </div>
         </div>
-        <div class="kpi-label">Kas &amp; Setara</div>
+        <div class="kpi-label">Cash &amp; Cash Equivalents</div>
         <div class="kpi-value" id="bs-kpi-cash-val">Rp · · · <span class="kpi-unit">T</span></div>
         <div class="kpi-footer">
           <span class="kpi-badge" id="bs-kpi-cash-badge">—</span>
@@ -1477,8 +1530,8 @@
       <div class="chart-card">
         <div class="chart-header">
           <div>
-            <div class="chart-title">Total Aset &amp; Liabilitas</div>
-            <div class="chart-subtitle">Tren aset dan liabilitas tahunan</div>
+            <div class="chart-title">Total Assets &amp; Liabilities</div>
+            <div class="chart-subtitle">Trend of assets and liabilities annually</div>
           </div>
           <span class="kpi-badge up" style="font-size:12px; padding:5px 10px;">↗ Aset Trend</span>
         </div>
@@ -1495,8 +1548,8 @@
       <div class="chart-card">
         <div class="chart-header">
           <div>
-            <div class="chart-title">Komposisi Ekuitas</div>
-            <div class="chart-subtitle">Struktur ekuitas dan perubahan modal</div>
+            <div class="chart-title">Equity Composition</div>
+            <div class="chart-subtitle">Equity Structure and Changes in Equity</div>
           </div>
           <span class="kpi-badge" style="font-size:12px; padding:5px 10px; background:#EFF6FF; color:#2563EB;">↗ +4.8% YoY</span>
         </div>
@@ -1516,8 +1569,8 @@
       <div class="chart-card">
         <div class="chart-header">
           <div>
-            <div class="chart-title">Kas &amp; Setara Kas Trend</div>
-            <div class="chart-subtitle">Pergerakan kas dan setara kas per periode</div>
+            <div class="chart-title">Cash &amp; Cash Equivalents Trend</div>
+            <div class="chart-subtitle">Movement of cash and cash equivalents per period</div>
           </div>
           <span class="kpi-badge" style="font-size:12px; padding:5px 10px; background:#F0FDF4; color:#16A34A; border:1px solid #BBF7D0;">
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -1538,7 +1591,7 @@
         <div class="chart-header">
           <div>
             <div class="chart-title">Balance Sheet Summary</div>
-            <div class="chart-subtitle">Ringkasan neraca per periode pelaporan</div>
+            <div class="chart-subtitle">Summary of balance sheet per reporting period</div>
           </div>
           <span class="kpi-badge up" style="font-size:12px; padding:5px 10px;">↗ Overall Growth</span>
         </div>
@@ -1747,17 +1800,6 @@
         </div>
       </div>
 
-    </div><!-- /kfi-kpi-grid -->
-
-    <!-- ── KFI: Chart Section Label ── -->
-    <div class="kfi-section-divider">
-      <span class="kfi-section-label">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
-        </svg>
-        Chart Analytics
-      </span>
-      <div class="kfi-divider-line"></div>
     </div>
 
     <!-- ── KFI: Charts Row ── -->
@@ -1767,18 +1809,18 @@
       <div class="chart-card">
         <div class="chart-header">
           <div>
-            <div class="chart-title">Riwayat Dividen</div>
+            <div class="chart-title"> Trend Working Capital Ratio </div>
             <div class="chart-subtitle">Dividend per share (bar) &amp; dividend yield (line) — historis tahunan</div>
           </div>
           <span class="kpi-badge" style="font-size:12px; padding:5px 10px; background:#FEF3C7; color:#B45309; border:1px solid #FDE68A;">
-            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;margin-right:3px"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            Bar + Line
+
+
           </span>
         </div>
         <div class="chart-body kfi-chart-body">
           <iframe
-            src="http://localhost:3000/public/question/a223521e-31c5-486a-8326-f37a9cb5bc9d?titled=false"
-            data-metabase-src="http://localhost:3000/public/question/a223521e-31c5-486a-8326-f37a9cb5bc9d?titled=false"
+            src="http://localhost:3000/public/question/a71cbf60-cfe4-4a8d-ab98-953197c4dccf"
+            data-metabase-src="http://localhost:3000/public/question/a71cbf60-cfe4-4a8d-ab98-953197c4dccf?titled=false"
             frameborder="0"
             class="kfi-chart-frame"
             id="kfi-chart-dividen">
@@ -1794,8 +1836,8 @@
             <div class="chart-subtitle">Return metrics year-over-year (line chart)</div>
           </div>
           <span class="kpi-badge" style="font-size:12px; padding:5px 10px; background:#EFF6FF; color:#2563EB; border:1px solid #BFDBFE;">
-            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            Line Chart
+            <!-- <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> -->
+          
           </span>
         </div>
         <div class="chart-body kfi-chart-body">
@@ -1894,6 +1936,9 @@
                 <option value="cff">Arus Kas Pendanaan (CFF)</option>
                 <option value="ending_cash_balance">Saldo Kas Akhir</option>
                 <option value="net_change_in_cash">Perubahan Kas Bersih</option>
+                <option value="inflow">Total Inflow</option>
+                <option value="outflow">Total Outflow</option>
+                <option value="netcashflow">Net Cash Flow</option>
               </optgroup>
               <optgroup label="Income Statement">
                 <option value="revenue">Pendapatan (Revenue)</option>
@@ -1910,12 +1955,17 @@
                 <option value="fcf">Arus Kas Bebas (FCF)</option>
               </optgroup>
               <optgroup label="Balance Sheet">
+                <option value="total_assets">Total Aset</option>
+                <option value="current_assets">Aset Lancar</option>
+                <option value="noncurrent_assets">Aset Tidak Lancar</option>
+                <option value="total_equity">Total Ekuitas</option>
+                <option value="total_liabilities">Total Liabilitas</option>
+                <option value="current_liabilities">Liabilitas Jangka Pendek</option>
+                <option value="noncurrent_liabilities">Liabilitas Jangka Panjang</option>
+                <option value="interest_bearing_debt">Interest Bearing Debt</option>
                 <option value="accounts_receivable">Piutang Usaha</option>
                 <option value="inventory">Persediaan (Inventory)</option>
                 <option value="accounts_payable">Utang Usaha</option>
-                <option value="total_assets">Total Aset</option>
-                <option value="total_equity">Total Ekuitas</option>
-                <option value="total_liabilities">Total Liabilitas</option>
               </optgroup>
             </select>
             <!-- Custom searchable dropdown -->
@@ -2023,10 +2073,10 @@
           </div>
           <div class="banner-form-row">
             <select class="banner-type-select" id="bannerType">
-              <option value="info">🔵 Informasi</option>
-              <option value="success">🟢 Data Baru Tersedia</option>
-              <option value="warning">🟡 Perhatian</option>
-              <option value="update">🟣 Pembaruan</option>
+              <option value="info">Informasi</option>
+              <option value="success">Data Baru Tersedia</option>
+              <option value="warning">Perhatian</option>
+              <option value="update">Pembaruan</option>
             </select>
             <select class="banner-target-select" id="bannerTarget">
               <option value="all">Semua Halaman</option>
@@ -2549,27 +2599,13 @@
       </svg>
     </button>
   </div>
-  <div class="notif-list">
-    <div class="notif-item unread">
-      <div class="notif-dot"></div>
-      <div class="notif-content">
-        <p>FCF Q4 2024 melebihi target <strong>+18.2%</strong></p>
-        <span>2 menit yang lalu</span>
-      </div>
-    </div>
-    <div class="notif-item unread">
-      <div class="notif-dot"></div>
-      <div class="notif-content">
-        <p>Data baru tersedia: <strong>November 2024</strong></p>
-        <span>1 jam yang lalu</span>
-      </div>
-    </div>
-    <div class="notif-item unread">
-      <div class="notif-dot"></div>
-      <div class="notif-content">
-        <p>Operating Cash Flow naik <strong>13.74% YoY</strong></p>
-        <span>3 jam yang lalu</span>
-      </div>
+  <div class="notif-list" id="notifList">
+    <div class="notif-empty">
+      <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="color:var(--text-muted,#94a3b8);margin-bottom:6px">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+      <p>Belum ada notifikasi</p>
     </div>
   </div>
 </div>
@@ -2947,7 +2983,7 @@
   </div>
 </div>
 
-<!-- ══ INSIGHT NOTES FLOATING BUTTON (Admin Only) ══ -->
+<!-- ══ INSIGHT NOTES FLOATING BUTTON (Manajemen Only) ══ -->
 <button class="insight-fab" id="insightFab" title="Catatan Insight" style="display:none" onclick="toggleInsightPanel()">
   <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -2991,11 +3027,10 @@
       <button class="insight-form-cancel-btn" id="insightFormCancelBtn" onclick="cancelInsightEdit()" style="display:none">Batal</button>
     </div>
     <select class="insight-category-select" id="insightCategory">
-      <option value="info">💡 Informasi Umum</option>
-      <option value="warning">⚠️ Perhatian</option>
-      <option value="positive">✅ Positif</option>
-      <option value="negative">🔴 Negatif</option>
-      <option value="action">🎯 Action Item</option>
+      <option value="info"> Informasi Umum</option>
+      <option value="warning"> Perhatian</option>
+      <option value="positive"> Positif</option>
+      <option value="negative">Negatif</option>
     </select>
     <textarea class="insight-textarea" id="insightTextarea" placeholder="Tulis catatan insight untuk halaman ini..." rows="3"></textarea>
     <div class="insight-form-footer">
@@ -3029,9 +3064,5 @@
 </div>
 
 <script src="script.js"></script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-
-<script src="charts-keuangan.js"></script>
 </body>
 </html>
