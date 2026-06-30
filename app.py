@@ -6,52 +6,54 @@ from datetime import datetime, timedelta
 import bcrypt
 import jwt
 import functools
-import os
 
-app = Flask(__name__)
-CORS(app, origins="*", supports_credentials=False)
+app = Flask(__name__, static_folder='.', static_url_path='')
+
+@app.route('/')
+@app.route('/index.html')
+def serve_index():
+    return send_from_directory('.', 'index.html')
+
 
 JWT_SECRET = "indocement_jwt_secret_ganti_ini_di_production"
 JWT_EXPIRY_DAYS = 7
+CORS(app, origins=[
+        "http://127.0.0.1:5500", "http://localhost:5500",
+        "http://127.0.0.1:5501", "http://localhost:5501",
+        "http://127.0.0.1:5000", "http://localhost:5000",
+        "http://127.0.0.1:8080", "http://localhost:8080",
+    ],
+     supports_credentials=False)
 
-# ── KONFIGURASI MySQL ─────────────────────────────────────────────
 MYSQL_CONFIG = {
-    "host":     os.environ.get("MYSQLHOST", "127.0.0.1"),
-    "port":     int(os.environ.get("MYSQLPORT", 3306)),
-    "user":     os.environ.get("MYSQLUSER", "root"),
-    "password": os.environ.get("MYSQLPASSWORD", ""),
-    "database": os.environ.get("MYSQLDATABASE", "railway"),
+    "host":     "127.0.0.1",
+    "port":     3306,
+    "user":     "root",       
+    "password": "Kum@2310501015",          
+    "database": "indocement",
     "cursorclass": pymysql.cursors.DictCursor,
     "charset":  "utf8mb4",
 }
 
-# Mapping nama kolom Flask → nama kolom MySQL
-# Dipakai di semua query agar tidak ada typo
+# menyesuaikan nama falsk dengan di MySQl
 COL = {
-    # periode
     "tahun":               "year",
     "kuartal":             "quarter",
-    # arus kas
     "ocf":                 "CFO",
     "cfi":                 "CFI",
     "cff":                 "CFF",
     "ending_cash":         "ending_cash_balance",
     "net_change_cash":     "net_change_in_cash",
-    # laba rugi
     "revenue":             "revenue",
     "cost_of_goods_sold":  "cost_of_goods_sold",
     "gross_profit":        "gross_profit",
     "net_income":          "net_income",
-    "laba_bersih":         "net_income",       # alias → kolom yg sama
+    "laba_bersih":         "net_income",       
     "operating_expenses":  "operating_expenses",
     "operating_income":    "operating_income",
     "tax_expense":         "tax_expense",
     "interest_expense":    "interest_expense",
-    "ebitda":              "EBITDA",
     "da_expense":          "da_expense",
-    "capex":               "capex",
-    "fcf":                 "fcf",
-    # neraca
     "accounts_receivable": "accounts_receivable",
     "inventory":           "inventory",
     "accounts_payable":    "accounts_payable",
@@ -60,7 +62,7 @@ COL = {
     "total_liabilities":   "total_liabilities",
 }
 
-# Field hapus data: nama dari frontend (query ?field=) → kolom MySQL di tabel indocement
+# Field untuk hapus data
 DELETE_FIELD_MAP = {
     "ocf":                 "CFO",
     "cfi":                 "CFI",
@@ -78,10 +80,7 @@ DELETE_FIELD_MAP = {
     "operating_income":    "operating_income",
     "tax_expense":         "tax_expense",
     "interest_expense":    "interest_expense",
-    "ebitda":              "EBITDA",
     "da_expense":          "da_expense",
-    "capex":               "capex",
-    "fcf":                 "fcf",
     "accounts_receivable": "accounts_receivable",
     "inventory":           "inventory",
     "accounts_payable":    "accounts_payable",
@@ -104,10 +103,7 @@ DELETE_FIELD_LABELS = {
     "operating_income":    "Laba Operasional",
     "tax_expense":         "Beban Pajak",
     "interest_expense":    "Beban Bunga",
-    "ebitda":              "EBITDA",
     "da_expense":          "Depresiasi & Amortisasi (D&A)",
-    "capex":               "Belanja Modal (CapEx)",
-    "fcf":                 "Arus Kas Bebas (FCF)",
     "accounts_receivable": "Piutang Usaha",
     "inventory":           "Persediaan (Inventory)",
     "accounts_payable":    "Utang Usaha",
@@ -116,6 +112,51 @@ DELETE_FIELD_LABELS = {
     "total_liabilities":   "Total Liabilitas",
 }
 
+def generate_token(user_id, username, role):
+    """Buat JWT token yang berlaku JWT_EXPIRY_DAYS hari."""
+    payload = {
+        "user_id": user_id,
+        "username": username,
+        "role": role,
+        "exp": datetime.utcnow() + timedelta(days=JWT_EXPIRY_DAYS)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+def decode_token(token):
+    """Decode JWT token, return payload atau None kalau tidak valid."""
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+
+def require_auth(f):
+    """Decorator: endpoint wajib login (kirim Authorization: Bearer <token>)."""
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Token tidak ditemukan", "message": "Login terlebih dahulu."}), 401
+        token = auth_header.split(" ", 1)[1]
+        payload = decode_token(token)
+        if not payload:
+            return jsonify({"error": "Token tidak valid atau sudah kadaluarsa", "message": "Silakan login ulang."}), 401
+        request.current_user = payload
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def require_admin(f):
+    """Decorator: endpoint hanya untuk role admin."""
+    @functools.wraps(f)
+    @require_auth
+    def wrapper(*args, **kwargs):
+        if request.current_user.get("role") != "admin":
+            return jsonify({"error": "Akses ditolak", "message": "Hanya admin yang dapat mengakses endpoint ini."}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
 
 def get_db():
     """Buka koneksi MySQL baru."""
@@ -123,12 +164,57 @@ def get_db():
     return conn
 
 
-def tambah_notifikasi(conn, pesan, tipe="success"):
-    """Simpan notifikasi ke tabel notifikasi di MySQL."""
+def tambah_notifikasi(conn, pesan, tipe="success", user_id=None):
+    """
+    Simpan notifikasi ke tabel notifikasi.
+    user_id = None  → notifikasi global (tampil untuk semua / admin)
+    user_id = <id>  → notifikasi personal (tampil hanya untuk user tsb)
+    """
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO notifikasi (pesan, tipe) VALUES (%s, %s)",
-            (pesan, tipe)
+            "INSERT INTO notifikasi (pesan, tipe, user_id) VALUES (%s, %s, %s)",
+            (pesan, tipe, user_id)
+        )
+
+
+def tambah_audit_log(conn, aksi, tabel_target, record_id=None,
+                     data_lama=None, data_baru=None, user_id=None, username=None):
+    """
+    Simpan jejak aktivitas ke tabel audit_log.
+    Dipanggil setelah setiap operasi INSERT / UPDATE / DELETE pada data keuangan,
+    serta saat register dan hapus user.
+
+    aksi          : string pendek, mis. 'INSERT', 'UPDATE', 'DELETE', 'REGISTER', 'DELETE_USER'
+    tabel_target  : nama tabel yang terpengaruh, mis. 'indocement', 'users'
+    record_id     : PK baris yang diubah (opsional)
+    data_lama     : dict snapshot sebelum perubahan (opsional, untuk UPDATE/DELETE)
+    data_baru     : dict snapshot sesudah perubahan (opsional, untuk INSERT/UPDATE)
+    user_id       : id user yang melakukan aksi (ambil dari JWT bila tersedia)
+    username      : username untuk referensi cepat tanpa JOIN
+    """
+    import json as _json
+    # Ambil user dari request context bila tidak dikirim eksplisit
+    if user_id is None:
+        try:
+            user_id  = request.current_user.get("user_id")
+            username = request.current_user.get("username")
+        except AttributeError:
+            pass
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO audit_log
+               (user_id, username, aksi, tabel_target, record_id, data_lama, data_baru)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (
+                user_id,
+                username,
+                aksi,
+                tabel_target,
+                record_id,
+                _json.dumps(data_lama,  ensure_ascii=False) if data_lama  is not None else None,
+                _json.dumps(data_baru,  ensure_ascii=False) if data_baru  is not None else None,
+            )
         )
 
 
@@ -168,6 +254,52 @@ def agg_avg(conn, col_mysql, where_clause, params):
     return float(v) if v is not None else 0
 
 
+def agg_last(conn, col_mysql, where_clause, params):
+    """
+    Ambil nilai satu kolom pada kuartal TERAKHIR yang cocok dengan filter
+    (ORDER BY year DESC, quarter DESC LIMIT 1).
+
+    Dipakai untuk akun NERACA / posisi (stock account) seperti
+    ending_cash_balance, total_assets, total_equity, total_liabilities,
+    accounts_receivable, inventory, accounts_payable - karena akun-akun
+    ini menyatakan saldo pada satu titik waktu, bukan akumulasi arus
+    selama periode. Menjumlahkan (SUM) saldo Q1+Q2+Q3+Q4 tidak punya
+    makna akuntansi; yang benar adalah saldo di akhir periode (kuartal
+    terakhir yang tersedia dalam filter, mis. Q4 untuk "All Year"/FY).
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""SELECT `{col_mysql}` AS v FROM indocement
+                {where_clause}
+                ORDER BY `year` DESC, `quarter` DESC
+                LIMIT 1""",
+            params or ()
+        )
+        row = cur.fetchone()
+    v = row["v"] if row else None
+    return float(v) if v is not None else 0.0
+
+
+# Kolom akun NERACA (posisi/stock) - gunakan agg_last, BUKAN agg_sum/agg_avg
+# Akun-akun ini menyatakan saldo pada satu titik waktu (point-in-time),
+# bukan arus/akumulasi selama periode. Menjumlahkan (SUM) Q1+Q2+Q3+Q4
+# tidak punya makna akuntansi; yang benar adalah saldo kuartal terakhir.
+BALANCE_SHEET_COLS = {
+    "ending_cash_balance",
+    "total_assets",
+    "total_equity",
+    "total_liabilities",
+    "accounts_receivable",
+    "inventory",
+    "accounts_payable",
+    "interest_bearing_Debt",
+    "current_assets",
+    "noncurrent_assets",
+    "current_liabilities",
+    "noncurrent_liabilities",
+}
+
+
 def count_rows(conn, where_clause, params):
     with conn.cursor() as cur:
         cur.execute(
@@ -180,79 +312,33 @@ def count_rows(conn, where_clause, params):
 
 def fmt_rupiah(val_juta):
     """
-    Format nilai dalam JUTAAN RUPIAH → tampilkan dalam T atau M.
-    Data di MySQL disimpan dalam satuan juta (misal 256786 = 256.786 juta = 0.257 T).
-      >= 1.000.000 juta (= 1 T) → X.XX T
-      <  1.000.000 juta         → X.XX M
-    Tidak ada satuan Jt karena unit minimum tampilan adalah M (miliar).
+    Format nilai dalam JUTAAN RUPIAH → tampilkan dalam T (Triliun).
+    Data di MySQL disimpan dalam satuan juta (misal 256786 = 256.786 juta = 0.26 T).
+    Semua nilai ditampilkan dalam satuan Triliun.
     """
     if val_juta is None:
         return "—"
     v = float(val_juta)
     abs_v = abs(v)
     if abs_v == 0:
-        return "0.00 M"
-    if abs_v >= 1_000_000:      # >= 1 triliun
-        return f"{v / 1_000_000:.2f} T"
-    else:                       # < 1 triliun → miliar
-        return f"{v / 1_000:.2f} M"
+        return "0.00 T"
+    return f"{v / 1_000_000:.2f} T"
 
 
-
-
-def generate_token(user_id, username, role):
-    payload = {
-        "user_id": user_id,
-        "username": username,
-        "role": role,
-        "exp": datetime.utcnow() + timedelta(days=JWT_EXPIRY_DAYS)
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
-
-def decode_token(token):
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        return None
-
-def require_auth(f):
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Token tidak ditemukan"}), 401
-        token = auth_header.split(" ", 1)[1]
-        payload = decode_token(token)
-        if not payload:
-            return jsonify({"error": "Token tidak valid atau sudah kadaluarsa"}), 401
-        request.current_user = payload
-        return f(*args, **kwargs)
-    return wrapper
-
-def require_admin(f):
-    @functools.wraps(f)
-    @require_auth
-    def wrapper(*args, **kwargs):
-        if request.current_user.get("role") != "admin":
-            return jsonify({"error": "Akses ditolak"}), 403
-        return f(*args, **kwargs)
-    return wrapper
-
-
-# ── ENDPOINT: REGISTER ───────────────────────────────────────────
+# ENDPOINT UNTUK REGIST
 @app.route("/api/register", methods=["POST"])
 def register():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Data tidak boleh kosong"}), 400
 
-    username      = (data.get("username") or "").strip()
-    password      = data.get("password") or ""
-    nama_depan    = (data.get("nama_depan") or "").strip()
+    username   = (data.get("username") or "").strip()
+    password   = data.get("password") or ""
+    nama_depan = (data.get("nama_depan") or "").strip()
     nama_belakang = (data.get("nama_belakang") or "").strip()
-    email         = (data.get("email") or "").strip()
-    divisi        = (data.get("divisi") or "").strip()
-    role          = data.get("role") or "user"
+    email      = (data.get("email") or "").strip()
+    divisi     = (data.get("divisi") or "").strip()
+    role       = data.get("role") or "manajemen"
 
     if not username:
         return jsonify({"error": "Username wajib diisi"}), 400
@@ -264,8 +350,8 @@ def register():
         return jsonify({"error": "Password minimal 6 karakter"}), 400
     if not nama_depan:
         return jsonify({"error": "Nama depan wajib diisi"}), 400
-    if role not in ("admin", "user"):
-        role = "user"
+    if role not in ("admin", "manajemen", "user"):
+        role = "manajemen"
 
     password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     nama_lengkap  = f"{nama_depan} {nama_belakang}".strip()
@@ -275,17 +361,24 @@ def register():
         with conn.cursor() as cur:
             cur.execute("SELECT id FROM users WHERE username = %s", (username,))
             if cur.fetchone():
-                return jsonify({"error": "Username sudah digunakan."}), 409
+                return jsonify({"error": "Username sudah digunakan. Pilih username lain."}), 409
             cur.execute(
                 """INSERT INTO users (username, password_hash, nama_lengkap, email, divisi, role)
                    VALUES (%s, %s, %s, %s, %s, %s)""",
                 (username, password_hash, nama_lengkap, email or None, divisi or None, role)
             )
             user_id = cur.lastrowid
+        tambah_notifikasi(conn, f"Selamat datang, {nama_lengkap}! Akun Anda sebagai {role} berhasil dibuat.", tipe="info", user_id=user_id)
+        tambah_audit_log(conn, aksi="REGISTER", tabel_target="users",
+                         record_id=user_id,
+                         data_baru={"username": username, "role": role,
+                                    "nama_lengkap": nama_lengkap, "divisi": divisi or None},
+                         user_id=user_id, username=username)
         conn.commit()
         token = generate_token(user_id, username, role)
         return jsonify({
             "status": "ok",
+            "pesan": f"Akun '{username}' berhasil dibuat.",
             "token": token,
             "user": {"id": user_id, "username": username, "nama": nama_lengkap, "role": role}
         }), 201
@@ -296,7 +389,7 @@ def register():
         conn.close()
 
 
-# ── ENDPOINT: LOGIN ──────────────────────────────────────────────
+# ENDPOINT LOGIN
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.get_json()
@@ -323,9 +416,22 @@ def login():
         if not bcrypt.checkpw(password.encode("utf-8"), user["password_hash"].encode("utf-8")):
             return jsonify({"error": "Username atau password salah"}), 401
 
+        # Tampilin Waktu terakhir login
         now = datetime.utcnow()
         with conn.cursor() as cur:
-            cur.execute("UPDATE users SET last_login = %s WHERE id = %s", (now, user["id"]))
+            cur.execute(
+                "UPDATE users SET last_login = %s WHERE id = %s",
+                (now, user["id"])
+            )
+        # Catat aktivitas login ke audit log
+        tambah_audit_log(conn, aksi="LOGIN", tabel_target="users",
+                         record_id=user["id"],
+                         data_baru={
+                             "role":      user["role"],
+                             "ip":        request.remote_addr,
+                             "waktu":     now.strftime("%d %b %Y, %H:%M:%S"),
+                         },
+                         user_id=user["id"], username=user["username"])
         conn.commit()
 
         token = generate_token(user["id"], user["username"], user["role"])
@@ -334,12 +440,12 @@ def login():
             "status": "ok",
             "token": token,
             "user": {
-                "id":       user["id"],
-                "username": user["username"],
-                "nama":     user["nama_lengkap"] or user["username"],
-                "role":     user["role"],
-                "divisi":   user["divisi"] or "",
-                "initials": initials,
+                "id":         user["id"],
+                "username":   user["username"],
+                "nama":       user["nama_lengkap"] or user["username"],
+                "role":       user["role"],
+                "divisi":     user["divisi"] or "",
+                "initials":   initials,
                 "last_login": now.strftime("%d %b %Y, %H:%M")
             }
         })
@@ -349,17 +455,34 @@ def login():
         conn.close()
 
 
-# ── ENDPOINT: LOGOUT ─────────────────────────────────────────────
+# ENDPOINT UNTUK LOG OUT
 @app.route("/api/logout", methods=["POST"])
 @require_auth
 def logout():
-    return jsonify({"status": "ok"})
+    """Catat aktivitas logout ke audit log. Token dihapus di sisi frontend."""
+    user = request.current_user
+    conn = get_db()
+    try:
+        tambah_audit_log(conn, aksi="LOGOUT", tabel_target="users",
+                         record_id=user.get("user_id"),
+                         data_baru={
+                             "ip":    request.remote_addr,
+                             "waktu": datetime.utcnow().strftime("%d %b %Y, %H:%M:%S"),
+                         },
+                         user_id=user.get("user_id"), username=user.get("username"))
+        conn.commit()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 
 
-# ── ENDPOINT: VERIFY TOKEN ───────────────────────────────────────
+# ENDPOINT UNTUK CEK TOKEN MASIH VALID
 @app.route("/api/auth/me", methods=["GET"])
 @require_auth
 def auth_me():
+    """Cek token masih valid, kembalikan info user."""
     payload = request.current_user
     conn = get_db()
     try:
@@ -387,15 +510,20 @@ def auth_me():
         conn.close()
 
 
-# ── ENDPOINT: GANTI PASSWORD ─────────────────────────────────────
+# ENDPOINT UNTUK GANTI PASSWORD
 @app.route("/api/auth/change-password", methods=["POST"])
 @require_auth
 def change_password():
     data = request.get_json()
+    if not data:
+        return jsonify({"error": "Data tidak boleh kosong"}), 400
     old_password = data.get("old_password") or ""
     new_password = data.get("new_password") or ""
+    if not old_password:
+        return jsonify({"error": "Password saat ini wajib diisi"}), 400
     if len(new_password) < 6:
         return jsonify({"error": "Password baru minimal 6 karakter"}), 400
+
     user_id = request.current_user["user_id"]
     conn = get_db()
     try:
@@ -417,8 +545,10 @@ def change_password():
     finally:
         conn.close()
 
-# ── ENDPOINT: TAMBAH DATA KEUANGAN ───────────────────────────────
+
+# ENDPOINT UNTUK TAMBAH DATA KEUANGAN
 @app.route("/api/keuangan", methods=["POST"])
+@require_admin
 def tambah_keuangan():
     data = request.get_json()
     if not data:
@@ -445,7 +575,7 @@ def tambah_keuangan():
 
     conn = get_db()
     try:
-        # Cek apakah periode sudah ada → UPDATE, belum ada → INSERT
+        # Cek waktu sdh ada
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT COUNT(*) AS n FROM indocement WHERE `year`=%s AND `quarter`=%s",
@@ -453,7 +583,7 @@ def tambah_keuangan():
             )
             exists = cur.fetchone()["n"] > 0
 
-        # Map payload → kolom MySQL (hanya kolom yang dikirim / tidak None)
+        # Map payload API ke nama kolom MySQL
         payload_map = {
             "revenue":             data.get("revenue"),
             "cost_of_goods_sold":  data.get("cost_of_goods_sold"),
@@ -461,15 +591,12 @@ def tambah_keuangan():
             "operating_expenses":  data.get("operating_expenses"),
             "operating_income":    data.get("operating_income"),
             "net_income":          data.get("net_income") or data.get("laba_bersih"),
-            "EBITDA":              data.get("ebitda"),
             "da_expense":          data.get("da_expense"),
             "tax_expense":         data.get("tax_expense"),
             "interest_expense":    data.get("interest_expense"),
             "CFO":                 data.get("ocf"),
             "CFI":                 data.get("cfi"),
             "CFF":                 data.get("cff"),
-            "capex":               data.get("capex"),
-            "fcf":                 data.get("fcf"),
             "ending_cash_balance": data.get("ending_cash"),
             "net_change_in_cash":  data.get("net_change_cash"),
             "total_assets":        data.get("total_assets"),
@@ -480,7 +607,7 @@ def tambah_keuangan():
             "accounts_payable":    data.get("accounts_payable"),
         }
 
-        # Minimal satu nilai field (selain tahun/kuartal) harus diisi
+        # Minimal satu nilai field 
         if not any(v is not None for v in payload_map.values()):
             return jsonify({
                 "error": "Tidak ada nilai data",
@@ -488,7 +615,16 @@ def tambah_keuangan():
             }), 400
 
         if exists:
-            # UPDATE — hanya timpa kolom yang dikirim (tidak None)
+            # UPDATE
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM indocement WHERE `year`=%s AND `quarter`=%s",
+                    (tahun, kuartal)
+                )
+                baris_lama = cur.fetchone()
+            record_id_audit = None 
+
+            # UPDATE timpa kolom yang dikirim saja, kolom lain tetap
             set_parts = []
             set_vals  = []
             for col_mysql, val in payload_map.items():
@@ -507,9 +643,16 @@ def tambah_keuangan():
                     f"WHERE `year`=%s AND `quarter`=%s",
                     set_vals
                 )
+            # Catat perubahan (field yg udh dikirim)
+            data_baru_audit = {k: v for k, v in payload_map.items() if v is not None}
+            data_lama_audit = {k: baris_lama.get(k) for k in data_baru_audit} if baris_lama else None
+            tambah_audit_log(conn, aksi="UPDATE", tabel_target="indocement",
+                             record_id=record_id_audit,
+                             data_lama=data_lama_audit,
+                             data_baru=data_baru_audit)
             aksi = "diperbarui"
         else:
-            # INSERT baru — sertakan kolom yang tidak None saja
+            # INSERT baru 
             cols_to_insert = ["`year`", "`quarter`"]
             vals_to_insert = [tahun, kuartal]
             for col_mysql, val in payload_map.items():
@@ -523,12 +666,18 @@ def tambah_keuangan():
                     f"VALUES ({placeholders})",
                     vals_to_insert
                 )
+            data_baru_audit = {k: v for k, v in payload_map.items() if v is not None}
+            data_baru_audit.update({"year": tahun, "quarter": kuartal})
+            tambah_audit_log(conn, aksi="INSERT", tabel_target="indocement",
+                             record_id=None,
+                             data_baru=data_baru_audit)
             aksi = "ditambahkan"
 
         tambah_notifikasi(
             conn,
-            f"Data keuangan {kuartal} {tahun} berhasil {aksi}",
-            tipe="success"
+            f"Anda berhasil {'menambahkan' if aksi == 'ditambahkan' else 'memperbarui'} data keuangan {kuartal} {tahun}.",
+            tipe="success",
+            user_id=request.current_user.get("user_id")
         )
         conn.commit()
         pesan = f"Data keuangan {kuartal} {tahun} berhasil {aksi}"
@@ -541,8 +690,9 @@ def tambah_keuangan():
         conn.close()
 
 
-# ── ENDPOINT: HAPUS DATA (set field ke NULL) ─────────────────────
+# ENDPOINT UNTUK HAPUS DATA
 @app.route("/api/data/field", methods=["DELETE"])
+@require_admin
 def hapus_field():
     """
     Hapus nilai satu field keuangan dengan meng-set kolom ke NULL.
@@ -588,6 +738,14 @@ def hapus_field():
 
     conn = get_db()
     try:
+        # Ambil snapshot data sebelum dihapus untuk audit
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT `year`, `quarter`, `{col_mysql}` FROM indocement {where}",
+                params or ()
+            )
+            baris_lama_list = cur.fetchall()
+
         with conn.cursor() as cur:
             cur.execute(
                 f"UPDATE indocement SET `{col_mysql}` = NULL {where}",
@@ -604,10 +762,21 @@ def hapus_field():
                 ),
             }), 404
 
+        # Catat audit log untuk setiap baris yang terpengaruh
+        for baris in baris_lama_list:
+            tambah_audit_log(
+                conn, aksi="DELETE_FIELD", tabel_target="indocement",
+                record_id=None,
+                data_lama={"field": col_mysql, "nilai": baris.get(col_mysql),
+                           "year": baris.get("year"), "quarter": baris.get("quarter")},
+                data_baru={"field": col_mysql, "nilai": None}
+            )
+
         tambah_notifikasi(
             conn,
-            f'{label} pada {periode} di-set ke NULL ({affected} baris terpengaruh)',
+            f"Anda berhasil menghapus data {label} pada {periode}.",
             tipe="warning",
+            user_id=request.current_user.get("user_id")
         )
         conn.commit()
 
@@ -628,26 +797,146 @@ def hapus_field():
         conn.close()
 
 
-# ── ENDPOINT: NOTIFIKASI ─────────────────────────────────────────
-@app.route("/api/notifikasi", methods=["GET"])
-def get_notifikasi():
+# ENDPOINT UNTUK AMBIL AUDIT LOG
+@app.route("/api/audit-log", methods=["GET"])
+@require_admin
+def get_audit_log():
+    """
+    Ambil daftar audit log. Hanya admin.
+    Query params opsional:
+      limit   (default 50, max 200)
+      offset  (default 0, untuk paginasi)
+      aksi    — filter jenis aksi: INSERT / UPDATE / DELETE_FIELD / REGISTER
+      user_id — filter per user
+    """
+    limit   = min(int(request.args.get("limit",  50)),  200)
+    offset  = int(request.args.get("offset", 0))
+    aksi    = request.args.get("aksi",    "").strip() or None
+    user_id = request.args.get("user_id", type=int)
+
+    where_parts, params = [], []
+    if aksi:
+        where_parts.append("al.aksi = %s");    params.append(aksi)
+    if user_id:
+        where_parts.append("al.user_id = %s"); params.append(user_id)
+    where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
     conn = get_db()
     try:
         with conn.cursor() as cur:
-            # Pastikan tabel ada sebelum query
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS notifikasi (
-                    id           INT AUTO_INCREMENT PRIMARY KEY,
-                    pesan        TEXT NOT NULL,
-                    tipe         VARCHAR(20) DEFAULT 'info',
-                    sudah_dibaca TINYINT(1)  DEFAULT 0,
-                    dibuat_pada  DATETIME    DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            cur.execute("SELECT * FROM notifikasi ORDER BY id DESC LIMIT 20")
+            cur.execute(
+                f"""SELECT al.id, al.user_id, al.username, al.aksi,
+                           al.tabel_target, al.record_id,
+                           al.data_lama, al.data_baru, al.dibuat_pada
+                    FROM audit_log al
+                    {where_sql}
+                    ORDER BY al.id DESC
+                    LIMIT %s OFFSET %s""",
+                (*params, limit, offset)
+            )
             rows = cur.fetchall()
-            cur.execute("SELECT COUNT(*) AS n FROM notifikasi WHERE sudah_dibaca = 0")
+            cur.execute(f"SELECT COUNT(*) AS n FROM audit_log al {where_sql}", params)
+            total = cur.fetchone()["n"]
+    finally:
+        conn.close()
+
+    import json as _json
+    for r in rows:
+        for col in ("data_lama", "data_baru"):
+            if r[col] and isinstance(r[col], str):
+                try:    r[col] = _json.loads(r[col])
+                except Exception: pass
+        if r["dibuat_pada"]:
+            r["dibuat_pada"] = r["dibuat_pada"].strftime("%d %b %Y, %H:%M:%S")
+
+    return jsonify({"total": total, "limit": limit, "offset": offset, "log": rows})
+
+
+@app.route("/api/audit-log/ringkasan", methods=["GET"])
+@require_admin
+def ringkasan_audit_log():
+    """
+    Ringkasan aktivitas: jumlah aksi per tipe dan 5 aktivitas terbaru.
+    Hanya admin.
+    """
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT aksi, COUNT(*) AS jumlah
+                   FROM audit_log
+                   GROUP BY aksi ORDER BY jumlah DESC"""
+            )
+            per_aksi = cur.fetchall()
+            cur.execute(
+                """SELECT al.id, al.username, al.aksi, al.tabel_target,
+                          al.record_id, al.dibuat_pada
+                   FROM audit_log al
+                   ORDER BY al.id DESC LIMIT 5"""
+            )
+            terbaru = cur.fetchall()
+    finally:
+        conn.close()
+
+    for r in terbaru:
+        if r["dibuat_pada"]:
+            r["dibuat_pada"] = r["dibuat_pada"].strftime("%d %b %Y, %H:%M:%S")
+
+    return jsonify({"per_aksi": per_aksi, "aktivitas_terbaru": terbaru})
+
+
+# ENDPOINT UNTUK NOTIF
+@app.route("/api/notifikasi", methods=["GET"])
+@require_auth
+def get_notifikasi():
+    """
+    Ambil notifikasi milik user yang sedang login.
+    Admin mendapat notifikasi global (user_id IS NULL) + notifikasi miliknya sendiri.
+    User biasa hanya mendapat notifikasi miliknya sendiri.
+    """
+    current = request.current_user
+    uid     = current.get("user_id")
+    role    = current.get("role")
+
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            if role == "admin":
+                # Admin: notif global (user_id IS NULL) + milik sendiri
+                cur.execute(
+                    """SELECT * FROM notifikasi
+                       WHERE user_id IS NULL OR user_id = %s
+                       ORDER BY id DESC LIMIT 30""",
+                    (uid,)
+                )
+                rows = cur.fetchall()
+                cur.execute(
+                    """SELECT COUNT(*) AS n FROM notifikasi
+                       WHERE sudah_dibaca = 0
+                         AND (user_id IS NULL OR user_id = %s)""",
+                    (uid,)
+                )
+            else:
+                # Manajemen & user biasa: hanya notif personal
+                cur.execute(
+                    """SELECT * FROM notifikasi
+                       WHERE user_id = %s
+                       ORDER BY id DESC LIMIT 30""",
+                    (uid,)
+                )
+                rows = cur.fetchall()
+                cur.execute(
+                    """SELECT COUNT(*) AS n FROM notifikasi
+                       WHERE sudah_dibaca = 0 AND user_id = %s""",
+                    (uid,)
+                )
             belum_dibaca = cur.fetchone()["n"]
+
+        # Format datetime
+        for r in rows:
+            if r.get("dibuat_pada"):
+                r["dibuat_pada"] = r["dibuat_pada"].strftime("%d %b %Y, %H:%M")
+
         conn.commit()
         return jsonify({"belum_dibaca": belum_dibaca, "notifikasi": rows})
     except Exception as e:
@@ -657,18 +946,82 @@ def get_notifikasi():
 
 
 @app.route("/api/notifikasi/baca-semua", methods=["POST"])
+@require_auth
 def tandai_sudah_dibaca():
+    """Tandai semua notifikasi milik user ini sebagai sudah dibaca."""
+    current = request.current_user
+    uid     = current.get("user_id")
+    role    = current.get("role")
+
     conn = get_db()
     try:
         with conn.cursor() as cur:
-            cur.execute("UPDATE notifikasi SET sudah_dibaca = 1")
+            if role == "admin":
+                cur.execute(
+                    "UPDATE notifikasi SET sudah_dibaca = 1 WHERE user_id IS NULL OR user_id = %s",
+                    (uid,)
+                )
+            else:
+                # Manajemen & user biasa: hanya notif personal
+                cur.execute(
+                    "UPDATE notifikasi SET sudah_dibaca = 1 WHERE user_id = %s",
+                    (uid,)
+                )
         conn.commit()
         return jsonify({"status": "ok"})
     finally:
         conn.close()
 
 
-# ── ENDPOINT: DAFTAR TAHUN TERSEDIA ─────────────────────────────
+@app.route("/api/notifikasi/<int:notif_id>", methods=["DELETE"])
+@require_auth
+def hapus_notifikasi(notif_id):
+    """Hapus satu notifikasi. User hanya bisa hapus miliknya sendiri; admin bisa hapus semua."""
+    current = request.current_user
+    uid     = current.get("user_id")
+    role    = current.get("role")
+
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            if role == "admin":
+                cur.execute("DELETE FROM notifikasi WHERE id = %s", (notif_id,))
+            else:
+                cur.execute(
+                    "DELETE FROM notifikasi WHERE id = %s AND user_id = %s",
+                    (notif_id, uid)
+                )
+            affected = cur.rowcount
+        conn.commit()
+        if affected == 0:
+            return jsonify({"error": "Notifikasi tidak ditemukan atau bukan milik Anda"}), 404
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/notifikasi/hapus-semua", methods=["DELETE"])
+@require_admin
+def hapus_semua_notifikasi():
+    """Hapus seluruh notifikasi dari database. Hanya admin."""
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM notifikasi")
+            affected = cur.rowcount
+        conn.commit()
+        return jsonify({"status": "ok", "pesan": f"{affected} notifikasi berhasil dihapus."})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ENDPOINT DAFTAR TAHUN
 @app.route("/api/tahun-tersedia", methods=["GET"])
 def tahun_tersedia():
     conn = get_db()
@@ -681,7 +1034,7 @@ def tahun_tersedia():
         conn.close()
 
 
-# ── ENDPOINT: KPI PAGE 1 — FINANCIAL OVERVIEW ───────────────────
+# ENDPOINT PAGE I
 @app.route("/api/kpi/keuangan", methods=["GET"])
 def kpi_keuangan():
     tahun   = request.args.get("tahun",   type=int)
@@ -696,11 +1049,18 @@ def kpi_keuangan():
                       "operating_income","ending_cash_balance",
                       "net_change_in_cash","operating_expenses","cost_of_goods_sold",
                       "accounts_receivable","inventory","accounts_payable",
-                      "interest_expense","EBITDA","da_expense","tax_expense",
+                      "interest_expense","da_expense","tax_expense",
                       "total_assets","total_equity","total_liabilities"]
 
-        cur_vals  = {c: agg_sum(conn, c, w,  params)   for c in mysql_cols}
-        prev_vals = {c: agg_sum(conn, c, wp, params_p) for c in mysql_cols}
+        def agg_for(col, where_clause, p):
+            # Akun neraca (saldo/posisi) -> ambil nilai kuartal terakhir,
+            # bukan dijumlahkan lintas kuartal.
+            if col in BALANCE_SHEET_COLS:
+                return agg_last(conn, col, where_clause, p)
+            return agg_sum(conn, col, where_clause, p)
+
+        cur_vals  = {c: agg_for(c, w,  params)   for c in mysql_cols}
+        prev_vals = {c: agg_for(c, wp, params_p) for c in mysql_cols}
         ada_data  = count_rows(conn, w, params) > 0
 
     finally:
@@ -725,7 +1085,7 @@ def kpi_keuangan():
         return {"nilai": fmt(cv), "nilai_raw": cv, "pct": pct(cv, pv),
                 "naik": (cv >= pv) if pv != 0 else None}
 
-    # FCF = CFO + CFI (CFI negatif), CapEx = abs(CFI)
+    # OPERASI FCF 
     fcf_cur   = float(cur_vals["CFO"])  + float(cur_vals["CFI"])
     fcf_prev  = float(prev_vals["CFO"]) + float(prev_vals["CFI"])
     capex_cur  = abs(float(cur_vals["CFI"]))
@@ -746,7 +1106,7 @@ def kpi_keuangan():
     })
 
 
-# ── ENDPOINT: KPI PAGE 2 — CASH FLOW (OPERASIONAL) ──────────────
+# ENPOINT PAGE II
 @app.route("/api/kpi/operasional", methods=["GET"])
 def kpi_operasional():
     tahun   = request.args.get("tahun",   type=int)
@@ -764,10 +1124,11 @@ def kpi_operasional():
         cfi_prev = agg_sum(conn, "CFI", wp, params_p)
         cff_prev = agg_sum(conn, "CFF", wp, params_p)
 
-        inflow_cur   = agg_sum(conn, "ending_cash_balance", w,  params)
-        outflow_cur  = abs(float(cfi_cur))   # CapEx = abs(CFI)
-        inflow_prev  = agg_sum(conn, "ending_cash_balance", wp, params_p)
-        outflow_prev = abs(float(cfi_prev))  # CapEx = abs(CFI)
+# RUMUS KPI INFLOW n OUTFLOW
+        inflow_cur   = agg_sum(conn, "inflow",  w,  params)
+        outflow_cur  = agg_sum(conn, "outflow", w,  params)
+        inflow_prev  = agg_sum(conn, "inflow",  wp, params_p)
+        outflow_prev = agg_sum(conn, "outflow", wp, params_p)
         ada_data     = count_rows(conn, w, params) > 0
     finally:
         conn.close()
@@ -800,7 +1161,7 @@ def kpi_operasional():
     })
 
 
-# ── ENDPOINT: KPI CASH FLOW HEALTH (EQR) ────────────────────────
+# ENDPOINT PAGE III
 @app.route("/api/kpi/cashflow", methods=["GET"])
 def kpi_cashflow():
     tahun   = request.args.get("tahun",   type=int)
@@ -847,7 +1208,7 @@ def kpi_cashflow():
     })
 
 
-# ── ENDPOINT: KPI MARGIN TRENDS ─────────────────────────────────
+# ENDPOINT PAGE IV
 @app.route("/api/kpi/margin", methods=["GET"])
 def kpi_margin():
     tahun   = request.args.get("tahun",   type=int)
@@ -860,11 +1221,15 @@ def kpi_margin():
 
         rev_cur     = agg_sum(conn, "revenue",      w,  params)
         gp_cur      = agg_sum(conn, "gross_profit", w,  params)
-        ebitda_cur  = agg_sum(conn, "EBITDA",       w,  params)
+        oi_cur      = agg_sum(conn, "operating_income", w, params)
+        da_cur      = agg_sum(conn, "da_expense",   w,  params)
+        ebitda_cur  = oi_cur + da_cur
         ni_cur      = agg_sum(conn, "net_income",   w,  params)
         rev_prev    = agg_sum(conn, "revenue",      wp, params_p)
         gp_prev     = agg_sum(conn, "gross_profit", wp, params_p)
-        ebitda_prev = agg_sum(conn, "EBITDA",       wp, params_p)
+        oi_prev     = agg_sum(conn, "operating_income", wp, params_p)
+        da_prev     = agg_sum(conn, "da_expense",   wp, params_p)
+        ebitda_prev = oi_prev + da_prev
         ni_prev     = agg_sum(conn, "net_income",   wp, params_p)
         ada_data    = count_rows(conn, w, params) > 0
     finally:
@@ -902,7 +1267,7 @@ def kpi_margin():
     })
 
 
-# ── ENDPOINT: KPI BALANCE SHEET TRENDS ──────────────────────────
+# ENDPOINT PAGE V
 @app.route("/api/kpi/balance", methods=["GET"])
 def kpi_balance():
     tahun   = request.args.get("tahun",   type=int)
@@ -913,12 +1278,12 @@ def kpi_balance():
         w,  params   = build_where(tahun, kuartal, prev=False)
         wp, params_p = build_where(tahun, kuartal, prev=True)
 
-        assets_cur   = agg_sum(conn, "total_assets",        w,  params)
-        equity_cur   = agg_sum(conn, "total_equity",        w,  params)
-        cash_cur     = agg_sum(conn, "ending_cash_balance", w,  params)
-        assets_prev  = agg_sum(conn, "total_assets",        wp, params_p)
-        equity_prev  = agg_sum(conn, "total_equity",        wp, params_p)
-        cash_prev    = agg_sum(conn, "ending_cash_balance", wp, params_p)
+        assets_cur   = agg_last(conn, "total_assets",        w,  params)
+        equity_cur   = agg_last(conn, "total_equity",        w,  params)
+        cash_cur     = agg_last(conn, "ending_cash_balance", w,  params)
+        assets_prev  = agg_last(conn, "total_assets",        wp, params_p)
+        equity_prev  = agg_last(conn, "total_equity",        wp, params_p)
+        cash_prev    = agg_last(conn, "ending_cash_balance", wp, params_p)
         ada_data     = count_rows(conn, w, params) > 0
     finally:
         conn.close()
@@ -949,7 +1314,7 @@ def kpi_balance():
     })
 
 
-# ── ENDPOINT: KPI KEY FINANCIAL INDICATORS ───────────────────────
+# ENPOINT PAGE VI
 @app.route("/api/kpi/kfi", methods=["GET"])
 def kpi_kfi():
     tahun   = request.args.get("tahun",   type=int)
@@ -957,7 +1322,6 @@ def kpi_kfi():
 
     conn = get_db()
     try:
-        # Jika tidak ada filter tahun → ambil tahun terbaru
         if not tahun:
             with conn.cursor() as cur:
                 cur.execute("SELECT MAX(`year`) AS y FROM indocement")
@@ -973,15 +1337,17 @@ def kpi_kfi():
         def avg_p(col): return agg_avg(conn, col, wp, params_p)
         def s(col): return agg_sum(conn, col, w,  params)
         def s_p(col): return agg_sum(conn, col, wp, params_p)
+        def bal(col): return agg_last(conn, col, w,  params)
+        def bal_p(col): return agg_last(conn, col, wp, params_p)
 
-        liab_cur   = avg("total_liabilities");   liab_prev   = avg_p("total_liabilities")
-        eq_cur     = avg("total_equity");         eq_prev     = avg_p("total_equity")
-        cash_cur   = avg("ending_cash_balance");  cash_prev   = avg_p("ending_cash_balance")
-        ebitda_cur = avg("EBITDA");               ebitda_prev = avg_p("EBITDA")
-        ar_cur     = avg("accounts_receivable");  ar_prev     = avg_p("accounts_receivable")
-        inv_cur    = avg("inventory");            inv_prev    = avg_p("inventory")
-        ap_cur     = avg("accounts_payable");     ap_prev     = avg_p("accounts_payable")
-        assets_cur = avg("total_assets");         assets_prev = avg_p("total_assets")
+        liab_cur   = bal("total_liabilities");    liab_prev   = bal_p("total_liabilities")
+        eq_cur     = bal("total_equity");          eq_prev     = bal_p("total_equity")
+        cash_cur   = bal("ending_cash_balance");   cash_prev   = bal_p("ending_cash_balance")
+        debt_cur   = bal("interest_bearing_Debt"); debt_prev   = bal_p("interest_bearing_Debt")
+        ebitda_cur = s("operating_income") + s("da_expense");   ebitda_prev = s_p("operating_income") + s_p("da_expense")
+        ca_cur     = bal("current_assets");        ca_prev     = bal_p("current_assets")
+        cl_cur     = bal("current_liabilities");   cl_prev     = bal_p("current_liabilities")
+        assets_cur = bal("total_assets");          assets_prev = bal_p("total_assets")
         oi_cur     = s("operating_income");       oi_prev     = s_p("operating_income")
         ni_cur     = s("net_income");             ni_prev     = s_p("net_income")
 
@@ -999,10 +1365,10 @@ def kpi_kfi():
 
     de_cur   = safe_div(liab_cur,  eq_cur)
     de_prev  = safe_div(liab_prev, eq_prev)
-    nd_cur   = safe_div((liab_cur  - cash_cur),  ebitda_cur)
-    nd_prev  = safe_div((liab_prev - cash_prev), ebitda_prev)
-    wc_cur   = safe_div((ar_cur  + inv_cur),  ap_cur)
-    wc_prev  = safe_div((ar_prev + inv_prev), ap_prev)
+    nd_cur   = safe_div((debt_cur  - cash_cur),  ebitda_cur)
+    nd_prev  = safe_div((debt_prev - cash_prev), ebitda_prev)
+    wc_cur   = safe_div(ca_cur,  cl_cur)
+    wc_prev  = safe_div(ca_prev, cl_prev)
     roa_cur  = safe_div(ni_cur,  assets_cur)
     roa_prev = safe_div(ni_prev, assets_prev)
     if roa_cur  is not None: roa_cur  *= 100
@@ -1011,8 +1377,16 @@ def kpi_kfi():
     roe_prev = safe_div(ni_prev, eq_prev)
     if roe_cur  is not None: roe_cur  *= 100
     if roe_prev is not None: roe_prev *= 100
-    ce_cur    = assets_cur  - liab_cur
-    ce_prev   = assets_prev - liab_prev
+    def safe_sub(a, b):
+        if a is None or b is None:
+            return None
+        try:
+            return float(a) - float(b)
+        except (TypeError, ValueError):
+            return None
+
+    ce_cur    = safe_sub(assets_cur,  cl_cur)
+    ce_prev   = safe_sub(assets_prev, cl_prev)
     roce_cur  = safe_div(oi_cur,  ce_cur)
     roce_prev = safe_div(oi_prev, ce_prev)
     if roce_cur  is not None: roce_cur  *= 100
@@ -1049,25 +1423,146 @@ def kpi_kfi():
         "roce":            build_ratio(roce_cur, roce_prev, unit="%", higher_is_better=True),
     })
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=False, host="0.0.0.0", port=port)
 
-    # Pastikan tabel notifikasi ada di MySQL
+# ENDPOINT TABLE OAGE I
+@app.route("/api/tabel/keuangan", methods=["GET"])
+def tabel_keuangan():
+    tahun   = request.args.get("tahun",   type=int)
+    kuartal = request.args.get("kuartal", type=str)
+
+    conn = get_db()
+    try:
+        where_parts = ["1=1"]
+        params = []
+        if tahun:
+            where_parts.append("`year` = %s")
+            params.append(tahun)
+        if kuartal:
+            where_parts.append("`quarter` = %s")
+            params.append(kuartal)
+        where = "WHERE " + " AND ".join(where_parts)
+
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT `year`, `quarter`, `CFO`, `CFI`, `net_income`,
+                           `accounts_receivable`, `inventory`, `ending_cash_balance`, `accounts_payable`
+                    FROM indocement
+                    {where}
+                    ORDER BY `year` DESC, FIELD(`quarter`,'Q4','Q3','Q2','Q1')""",
+                params
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    def safe_float(v):
+        try: return float(v) if v is not None else 0.0
+        except: return 0.0
+
+    def safe_ratio(num, den):
+        try:
+            n, d = float(num), float(den)
+            return round(n / d, 2) if d != 0 else None
+        except: return None
+
+    result = []
+    for r in rows:
+        cfo = safe_float(r["CFO"])
+        cfi = safe_float(r["CFI"])
+        fcf = cfo + cfi
+        ni  = safe_float(r["net_income"])
+        ar  = safe_float(r["accounts_receivable"])
+        inv = safe_float(r["inventory"])
+        csh = safe_float(r["ending_cash_balance"])
+        ap  = safe_float(r["accounts_payable"])
+        cr  = safe_ratio(ar + inv + csh, ap)
+
+        result.append({
+            "year":           r["year"],
+            "quarter":        r["quarter"],
+            "ocf":            fmt_rupiah(cfo),
+            "ocf_raw":        cfo,
+            "net_income":     fmt_rupiah(ni),
+            "net_income_raw": ni,
+            "fcf":            fmt_rupiah(fcf),
+            "fcf_raw":        fcf,
+            "current_ratio":  f"{cr:.2f}" if cr is not None else "—",
+        })
+
+    return jsonify({"ada_data": len(result) > 0, "rows": result, "total": len(result)})
+
+if __name__ == "__main__":
     conn = get_db()
     with conn.cursor() as cur:
+        # Tabel notifikasi
         cur.execute("""
             CREATE TABLE IF NOT EXISTS notifikasi (
                 id           INT AUTO_INCREMENT PRIMARY KEY,
                 pesan        TEXT NOT NULL,
                 tipe         VARCHAR(20) DEFAULT 'info',
-                sudah_dibaca TINYINT(1) DEFAULT 0,
-                dibuat_pada  DATETIME DEFAULT CURRENT_TIMESTAMP
+                sudah_dibaca TINYINT(1)  DEFAULT 0,
+                user_id      INT          DEFAULT NULL,
+                dibuat_pada  DATETIME    DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
+        # Tabel users
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id            INT AUTO_INCREMENT PRIMARY KEY,
+                username      VARCHAR(50)  UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                nama_lengkap  VARCHAR(100),
+                email         VARCHAR(150),
+                divisi        VARCHAR(100),
+                role          ENUM('admin','manajemen','user') DEFAULT 'manajemen',
+                last_login    DATETIME DEFAULT NULL,
+                dibuat_pada   DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Tabel audit_log
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id           INT AUTO_INCREMENT PRIMARY KEY,
+                user_id      INT          DEFAULT NULL,
+                username     VARCHAR(50)  DEFAULT NULL,
+                aksi         VARCHAR(50)  NOT NULL,
+                tabel_target VARCHAR(50)  NOT NULL,
+                record_id    INT          DEFAULT NULL,
+                data_lama    JSON         DEFAULT NULL,
+                data_baru    JSON         DEFAULT NULL,
+                dibuat_pada  DATETIME     DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_user_id    (user_id),
+                INDEX idx_aksi       (aksi),
+                INDEX idx_dibuat_pada(dibuat_pada)
+            )
+        """)
     conn.commit()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE users ADD COLUMN last_login DATETIME DEFAULT NULL
+            """)
+        conn.commit()
+    except Exception:
+        pass  
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE notifikasi ADD COLUMN user_id INT DEFAULT NULL
+            """)
+        conn.commit()
+    except Exception:
+        pass  
+    # Migrasi ENUM role: tambah 'manajemen' jika belum ada
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE users
+                MODIFY COLUMN role ENUM('admin','manajemen','user') DEFAULT 'manajemen'
+            """)
+        conn.commit()
+    except Exception:
+        pass
     conn.close()
-
     print("ok")
     app.run(debug=True, port=5000)
