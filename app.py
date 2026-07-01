@@ -18,19 +18,26 @@ def serve_index():
 JWT_SECRET = "indocement_jwt_secret_ganti_ini_di_production"
 JWT_EXPIRY_DAYS = 7
 CORS(app, origins=[
+        # Local development
         "http://127.0.0.1:5500", "http://localhost:5500",
         "http://127.0.0.1:5501", "http://localhost:5501",
         "http://127.0.0.1:5000", "http://localhost:5000",
         "http://127.0.0.1:8080", "http://localhost:8080",
+        # GitHub Pages - ganti sesuai URL kamu
+        "https://sarah-tobing.github.io",
+        # Cloudflare Tunnel Flask
+        "https://horn-southwest-total-liverpool.trycloudflare.com",
+        # ngrok Metabase
+        "https://broadways-consumer-vendor.ngrok-free.dev",
     ],
      supports_credentials=False)
 
 MYSQL_CONFIG = {
-    "host":     "127.0.0.1",
-    "port":     3306,
-    "user":     "root",       
-    "password": "Kum@2310501015",          
-    "database": "indocement",
+    "host":     os.environ.get("MYSQLHOST", "127.0.0.1"),
+    "port":     int(os.environ.get("MYSQLPORT", 3306)),
+    "user":     os.environ.get("MYSQLUSER", "root"),
+    "password": os.environ.get("MYSQLPASSWORD", "Kum@2310501015"),
+    "database": os.environ.get("MYSQLDATABASE", "indocement"),
     "cursorclass": pymysql.cursors.DictCursor,
     "charset":  "utf8mb4",
 }
