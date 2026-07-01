@@ -24,7 +24,7 @@ CORS(app, origins=[
         "http://127.0.0.1:5000", "http://localhost:5000",
         "http://127.0.0.1:8080", "http://localhost:8080",
         # GitHub Pages - ganti sesuai URL kamu
-        "https://sarah-tobing.github.io",
+        "https://srhtbgg13.github.io/cobapart3/",
         # Cloudflare Tunnel Flask
         "https://horn-southwest-total-liverpool.trycloudflare.com",
         # ngrok Metabase
