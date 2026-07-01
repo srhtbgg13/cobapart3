@@ -433,8 +433,8 @@ function initQuarterBtns(groupId, hiddenInputId, onChangeCallback) {
 
 /* ── 4. KEUANGAN FILTERS ── */
 const KEU = {
-  "keu-chart1": "http://localhost:3000/public/question/cc5f3355-5e12-442c-b9a1-780f2b9cd21f?titled=false",
-  "keu-chart2": "http://localhost:3000/public/question/9cfdc768-ee6f-4e39-8044-a59785117ea7?titled=false",
+  "keu-chart1": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/cc5f3355-5e12-442c-b9a1-780f2b9cd21f?titled=false",
+  "keu-chart2": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/9cfdc768-ee6f-4e39-8044-a59785117ea7?titled=false",
 };
 
 /* ── Render tabel ringkasan keuangan dari Flask API ── */
@@ -504,10 +504,10 @@ initQuarterBtns('keu-quarterBtns', 'keu-quarterFilter', updateKeuangan);
 
 /* ── 5. OPERASIONAL FILTERS ── */
 const OPS = {
-  "ops-chart1": "http://localhost:3000/public/question/8b501fe6-625f-4fa3-b39a-ef668a435714?titled=false",
-  "ops-chart2": "http://localhost:3000/public/question/cc5f3355-5e12-442c-b9a1-780f2b9cd21f?titled=false",
-  "ops-chart3": "http://localhost:3000/public/question/acd2f9b1-d901-44ed-b4c1-9ca3efa6f3f1?titled=false",
-  "ops-chart4": "http://localhost:3000/public/question/efe9aeae-0f2f-486c-99fe-eb6bab863a7e?titled=false",
+  "ops-chart1": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/8b501fe6-625f-4fa3-b39a-ef668a435714?titled=false",
+  "ops-chart2": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/cc5f3355-5e12-442c-b9a1-780f2b9cd21f?titled=false",
+  "ops-chart3": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/acd2f9b1-d901-44ed-b4c1-9ca3efa6f3f1?titled=false",
+  "ops-chart4": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/efe9aeae-0f2f-486c-99fe-eb6bab863a7e?titled=false",
 };
 
 function updateOps() {
@@ -531,8 +531,8 @@ initQuarterBtns('ops-quarterBtns', 'ops-catFilter', updateOps);
 
 /* ── 6. PROFIT VS CASH QUALITY FILTERS ── */
 const PCQ_BASES = {
-  "pcq-chart-eqr-trend": "http://localhost:3000/public/question/d9e197ac-9786-4707-b8dd-be6242b5725c?titled=false",
-  "pcq-chart-table-laba": "http://localhost:3000/public/question/294812b0-f504-400d-9709-9b8e188a2a3a?titled=false",
+  "pcq-chart-eqr-trend": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/d9e197ac-9786-4707-b8dd-be6242b5725c?titled=false",
+  "pcq-chart-table-laba": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/294812b0-f504-400d-9709-9b8e188a2a3a?titled=false",
 };
 
 function updatePCQ() {
@@ -583,13 +583,13 @@ initQuarterBtns('fcf-quarterBtns', 'fcf-quarterFilter', updateFCF);
 /* ── 8. MARGIN TRENDS FILTERS ── */
 const MG_BASES = {
   // Chart 1 — Gross Margin Performance (UUID sudah dikonfirmasi)
-  "mg-chart-gross":  "http://localhost:3000/public/question/67725a9a-bf3a-4a38-b120-8ad1824241cc?titled=false",
+  "mg-chart-gross":  "https://broadways-consumer-vendor.ngrok-free.dev/public/question/67725a9a-bf3a-4a38-b120-8ad1824241cc?titled=false",
   // Chart 2 — EBITDA Margin Performance (ganti UUID_EBITDA dengan UUID asli dari Metabase)
-  "mg-chart-ebitda": "http://localhost:3000/public/question/654e6a7c-7769-4c6e-a7a4-2a20a7828041?titled=false",
+  "mg-chart-ebitda": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/654e6a7c-7769-4c6e-a7a4-2a20a7828041?titled=false",
   // Chart 3 — Annual Margin Trend (ganti UUID_ANNUAL dengan UUID asli dari Metabase)
-  "mg-chart-annual": "http://localhost:3000/public/question/6135fa0f-7d65-4b07-bb99-6d512d0b2364?titled=false",
+  "mg-chart-annual": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/6135fa0f-7d65-4b07-bb99-6d512d0b2364?titled=false",
   // Chart 4 — Margin Summary Table (ganti UUID_TABLE dengan UUID asli dari Metabase)
-  "mg-chart-table":  "http://localhost:3000/public/question/5c6039e6-15bb-4c7e-9d31-0199542e1517?titled=false",
+  "mg-chart-table":  "https://broadways-consumer-vendor.ngrok-free.dev/public/question/5c6039e6-15bb-4c7e-9d31-0199542e1517?titled=false",
 };
 
 function updateMargin() {
@@ -1501,10 +1501,10 @@ async function updateKpiBalance() {
 
 /* ── Balance Sheet Chart Frames — URL base masing-masing chart ── */
 const BS_BASES = {
-  'bs-chart1': 'http://localhost:3000/public/question/048f79e4-333a-447b-83f5-78b8dc754994?titled=false',
-  'bs-chart2': 'http://localhost:3000/public/question/ff0ec1c3-0531-4e50-a0bd-960f30e27166?titled=false',
-  'bs-chart3': 'http://localhost:3000/public/question/0a87c31d-3dc1-44dd-924c-116d3ab7522c?titled=false',
-  'bs-chart4': 'http://localhost:3000/public/question/ee26e79e-3302-44fb-b453-4210f11687ff?titled=false',
+  'bs-chart1': 'https://broadways-consumer-vendor.ngrok-free.dev/public/question/048f79e4-333a-447b-83f5-78b8dc754994?titled=false',
+  'bs-chart2': 'https://broadways-consumer-vendor.ngrok-free.dev/public/question/ff0ec1c3-0531-4e50-a0bd-960f30e27166?titled=false',
+  'bs-chart3': 'https://broadways-consumer-vendor.ngrok-free.dev/public/question/0a87c31d-3dc1-44dd-924c-116d3ab7522c?titled=false',
+  'bs-chart4': 'https://broadways-consumer-vendor.ngrok-free.dev/public/question/ee26e79e-3302-44fb-b453-4210f11687ff?titled=false',
 };
 
 function updateBalanceCharts() {
@@ -2734,8 +2734,8 @@ function renderKfiKpiCard(item, data) {
 
 /* ── URL base Metabase untuk chart KFI ── */
 const KFI_CHARTS = {
-  "kfi-chart-dividen": "http://localhost:3000/public/question/a71cbf60-cfe4-4a8d-ab98-953197c4dccf?titled=false",
-  "kfi-chart-returns": "http://localhost:3000/public/question/61a66e12-6222-4004-b731-f812c1192521?titled=false",
+  "kfi-chart-dividen": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/a71cbf60-cfe4-4a8d-ab98-953197c4dccf?titled=false",
+  "kfi-chart-returns": "https://broadways-consumer-vendor.ngrok-free.dev/public/question/61a66e12-6222-4004-b731-f812c1192521?titled=false",
 };
 
 async function updateKfiKpi() {
