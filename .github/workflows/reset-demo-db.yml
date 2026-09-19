@@ -1,0 +1,40 @@
+# .github/workflows/reset-demo-db.yml
+#
+# Menjalankan reset_demo_db.py setiap 12 jam (00:00 dan 12:00 UTC).
+# Bisa juga dipicu manual lewat tab "Actions" di GitHub (workflow_dispatch).
+#
+# WAJIB diset dulu di repo: Settings > Secrets and variables > Actions > New repository secret
+#   DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+# Pastikan pakai kredensial database DEMO, bukan database tugas akhir asli.
+
+name: Reset Demo Database
+
+on:
+  schedule:
+    - cron: "0 0,12 * * *"   # 00:00 & 12:00 UTC — sesuaikan jam WIB (+7) sendiri
+  workflow_dispatch: {}       # supaya bisa di-trigger manual dari tab Actions
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pymysql python-dotenv
+
+      - name: Run reset script
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          CSV_PATH: "INDOCEMENT.csv"
+        run: python reset_demo_db.py

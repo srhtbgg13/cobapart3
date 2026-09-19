@@ -1,0 +1,12 @@
+# Kredensial — JANGAN pernah di-commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor / OS
+.DS_Store
+.vscode/
