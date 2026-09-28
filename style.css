@@ -540,6 +540,7 @@ body.sidebar-hidden .toggle-line-3 { transform: rotate(-45deg) translate(3.2px, 
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
+  min-width: 0;
   display: flex; flex-direction: column;
   transition: box-shadow 0.2s;
 }
@@ -568,13 +569,19 @@ body.sidebar-hidden .toggle-line-3 { transform: rotate(-45deg) translate(3.2px, 
 }
 
 .chart-body {
-  flex: 1; overflow: hidden;
+  flex: 1; overflow: hidden; min-width: 0;
 }
 .chart-body iframe {
   width: 100%;
   height: calc(300px + var(--mb-title-h));
   margin-top: calc(-1 * var(--mb-title-h));
   border: none; display: block;
+}
+/* Chart.js (mengganti iframe Metabase untuk Operating Cash Flow Trend) */
+.chart-body canvas {
+  width: 100% !important;
+  height: 340px !important;
+  display: block;
 }
 .chart-body-fill {
   flex: 1;
@@ -639,7 +646,8 @@ body.sidebar-hidden .toggle-line-3 { transform: rotate(-45deg) translate(3.2px, 
   transition: opacity 0.3s;
 }
 
-/* sembunyikan filter bar chart (page ii yg chart) */
+/* sembunyikan filter bar chart (page ii yg chart) — sisa aturan iframe lama,
+   dibiarkan untuk kompatibilitas jika suatu saat dipakai lagi */
 .pcq-eqr-frame iframe {
   width: 100%;
   height: calc(100% + 140px + 56px);
@@ -649,6 +657,13 @@ body.sidebar-hidden .toggle-line-3 { transform: rotate(-45deg) translate(3.2px, 
   display: block;
   opacity: 0;
   transition: opacity 0.3s;
+}
+
+/* Chart.js — Trend Cash Flow to Earnings Ratio (mengganti iframe Metabase) */
+.pcq-eqr-frame canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 
 .legend-dots { display: flex; align-items: center; gap: 6px; }
@@ -730,6 +745,31 @@ body.sidebar-hidden .toggle-line-3 { transform: rotate(-45deg) translate(3.2px, 
 .keu-summary-table th:nth-child(4), .keu-summary-table td:nth-child(4) { width: 19%; text-align: right; }
 .keu-summary-table th:nth-child(5), .keu-summary-table td:nth-child(5) { width: 19%; text-align: right; }
 .keu-summary-table th:nth-child(6), .keu-summary-table td:nth-child(6) { width: 19%; text-align: right; }
+/* ops-detail-table punya 8 kolom (Year, Quarter, OCF, CFI, CFF, TCF, Inflow, Outflow) —
+   kolom persen bawaan keu-summary-table (dibuat utk 6 kolom) bikin angka kepotong.
+   Solusinya: lebar kolom pakai px tetap + tabel boleh lebih lebar dari card,
+   scroll horizontal di wrapper-nya (lihat .ops-detail-wrap). */
+.ops-detail-table.keu-summary-table { width: 680px; font-size: 12px; }
+.ops-detail-table.keu-summary-table thead,
+.ops-detail-table.keu-summary-table tbody,
+.ops-detail-table.keu-summary-table tbody tr { width: 680px; }
+.ops-detail-table.keu-summary-table th,
+.ops-detail-table.keu-summary-table td { padding-left: 12px; padding-right: 12px; }
+.ops-detail-table.keu-summary-table th:nth-child(1), .ops-detail-table.keu-summary-table td:nth-child(1) { width: 60px; }
+.ops-detail-table.keu-summary-table th:nth-child(2), .ops-detail-table.keu-summary-table td:nth-child(2) { width: 70px; }
+.ops-detail-table.keu-summary-table th:nth-child(3), .ops-detail-table.keu-summary-table td:nth-child(3),
+.ops-detail-table.keu-summary-table th:nth-child(4), .ops-detail-table.keu-summary-table td:nth-child(4),
+.ops-detail-table.keu-summary-table th:nth-child(5), .ops-detail-table.keu-summary-table td:nth-child(5),
+.ops-detail-table.keu-summary-table th:nth-child(6), .ops-detail-table.keu-summary-table td:nth-child(6) { width: 85px; text-align: right; }
+.ops-detail-table.keu-summary-table th:nth-child(7), .ops-detail-table.keu-summary-table td:nth-child(7),
+.ops-detail-table.keu-summary-table th:nth-child(8), .ops-detail-table.keu-summary-table td:nth-child(8) { width: 90px; text-align: right; }
+.ops-detail-wrap { overflow-x: auto; }
+/* pcq-laba-table punya 4 kolom (Year, Net Income, OCF, EQR) — override lebar
+   bawaan keu-summary-table (dibuat utk 6 kolom) supaya pas 100%. */
+.pcq-laba-table.keu-summary-table th:nth-child(1), .pcq-laba-table.keu-summary-table td:nth-child(1) { width: 20%; }
+.pcq-laba-table.keu-summary-table th:nth-child(2), .pcq-laba-table.keu-summary-table td:nth-child(2),
+.pcq-laba-table.keu-summary-table th:nth-child(3), .pcq-laba-table.keu-summary-table td:nth-child(3) { width: 32%; text-align: right; }
+.pcq-laba-table.keu-summary-table th:nth-child(4), .pcq-laba-table.keu-summary-table td:nth-child(4) { width: 16%; text-align: right; }
 .keu-summary-table tbody tr:last-child td { border-bottom: none; }
 .keu-summary-table tbody tr:hover { background: var(--surface-alt, #f8f9fb); }
 .keu-table-loading {
@@ -2552,6 +2592,26 @@ body.role-admin .user-role-badge {
 .nav-group.open > .nav-group-trigger .nav-icon-green,
 .nav-group-trigger:hover .nav-icon-green {
   background: rgba(16,185,129,0.32) !important;
+}
+
+.nav-icon-teal {
+  background: rgba(45,212,191,0.20) !important;
+  color: #5EEAD4;
+}
+
+.nav-group.open > .nav-group-trigger .nav-icon-teal,
+.nav-group-trigger:hover .nav-icon-teal {
+  background: rgba(45,212,191,0.32) !important;
+}
+
+.nav-icon-purple {
+  background: rgba(167,139,250,0.20) !important;
+  color: #C4B5FD;
+}
+
+.nav-group.open > .nav-group-trigger .nav-icon-purple,
+.nav-group-trigger:hover .nav-icon-purple {
+  background: rgba(167,139,250,0.32) !important;
 }
 
 /* ── Nav Sub-Group (nested inside nav-group-children) ── */
@@ -8362,6 +8422,7 @@ body.sidebar-hidden .toggle-line-3 { transform: rotate(-45deg) translate(3.2px, 
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
+  min-width: 0;
   display: flex; flex-direction: column;
   transition: box-shadow 0.2s;
 }
@@ -8383,7 +8444,7 @@ body.sidebar-hidden .toggle-line-3 { transform: rotate(-45deg) translate(3.2px, 
 }
 
 .chart-body {
-  flex: 1; overflow: hidden;
+  flex: 1; overflow: hidden; min-width: 0;
 }
 .chart-body iframe {
   width: 100%;
@@ -10236,6 +10297,26 @@ body.role-admin .user-role-badge {
 .nav-group.open > .nav-group-trigger .nav-icon-green,
 .nav-group-trigger:hover .nav-icon-green {
   background: rgba(16,185,129,0.32) !important;
+}
+
+.nav-icon-teal {
+  background: rgba(45,212,191,0.20) !important;
+  color: #5EEAD4;
+}
+
+.nav-group.open > .nav-group-trigger .nav-icon-teal,
+.nav-group-trigger:hover .nav-icon-teal {
+  background: rgba(45,212,191,0.32) !important;
+}
+
+.nav-icon-purple {
+  background: rgba(167,139,250,0.20) !important;
+  color: #C4B5FD;
+}
+
+.nav-group.open > .nav-group-trigger .nav-icon-purple,
+.nav-group-trigger:hover .nav-icon-purple {
+  background: rgba(167,139,250,0.32) !important;
 }
 
 /* ── Nav Sub-Group (nested inside nav-group-children) ── */
@@ -15646,4 +15727,74 @@ body.role-guest #pf2-position-field { display: none !important; }
 #mg-chart-annual {
   height: calc(340px + var(--mb-title-h) + 40px) !important;
   margin-top: calc(-1 * (var(--mb-title-h) + 40px)) !important;
+}
+/* ══════════════════════════════════════════
+   NOTIFIKASI APPROVAL — tombol Setujui / Tolak
+   (khusus notifikasi tipe 'approval' untuk role Manajemen)
+   ══════════════════════════════════════════ */
+.notif-item.notif-approval { cursor: default; }
+.notif-approval-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.notif-btn-approve,
+.notif-btn-reject {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 700;
+  border-radius: var(--radius-sm, 10px);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.notif-btn-approve {
+  border: 1.5px solid var(--up);
+  background: var(--up);
+  color: #fff;
+}
+.notif-btn-approve:hover:not(:disabled) {
+  background: #128a3e;
+  border-color: #128a3e;
+  box-shadow: 0 2px 8px rgba(22,163,74,0.3);
+}
+.notif-btn-reject {
+  border: 1.5px solid var(--down);
+  background: #fff;
+  color: var(--down);
+}
+.notif-btn-reject:hover:not(:disabled) {
+  background: var(--down);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(220,38,38,0.25);
+}
+.notif-btn-approve:disabled,
+.notif-btn-reject:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+.notif-btn-approve:active:not(:disabled),
+.notif-btn-reject:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Badge kecil "Menunggu Persetujuan" di item notifikasi approval */
+.notif-approval-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent2);
+  background: #EFF6FF;
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  vertical-align: middle;
 }

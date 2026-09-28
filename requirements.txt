@@ -4,3 +4,5 @@ PyMySQL
 bcrypt
 PyJWT
 python-dotenv
+cryptography
+gunicorn

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard Analytics PT INDOCEMENT</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -373,91 +374,82 @@
       <span class="nav-item-label">Home</span>
     </a>
 
-    <!-- ── 2. DASHBOARD KEUANGAN (collapsible) ── -->
-    <div class="nav-group" id="navgroup-dashboard">
-      <button class="nav-group-trigger" onclick="toggleNavGroup('navgroup-dashboard')">
+    <!-- ── 2. OVERVIEW (standalone, tanpa section) ── -->
+    <a class="nav-item" data-page="keuangan" href="#" onclick="switchPage('keuangan'); return false;">
+      <span class="nav-item-icon-wrap nav-icon-blue">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+      </span>
+      <span class="nav-item-label">Financial Overview</span>
+    </a>
+
+    <!-- ── 3. ARUS KAS / CASH FLOW (collapsible) ── -->
+    <div class="nav-group" id="navgroup-arus-kas">
+      <button class="nav-group-trigger" onclick="toggleNavGroup('navgroup-arus-kas')">
         <span class="nav-group-trigger-left">
-          <span class="nav-group-icon-wrap nav-icon-blue">
+          <span class="nav-group-icon-wrap nav-icon-teal">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
-              <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
             </svg>
           </span>
-          Dashboard Keuangan
+          Cash Flow
         </span>
         <svg class="nav-group-chevron" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
       </button>
       <div class="nav-group-children">
+        <a class="nav-sub-item" data-page="operasional" href="#" onclick="switchPage('operasional'); return false;">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>
+          </svg>
+          Resource Overview
+        </a>
+        <a class="nav-sub-item" data-page="penjualan" href="#" onclick="switchPage('penjualan'); return false;">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          Cash Flow Health
+        </a>
+      </div>
+    </div>
 
-        <!-- Sub-group: Operasional -->
-        <div class="nav-sub-group" id="navsubgroup-operational">
-          <button class="nav-sub-group-trigger" onclick="toggleNavSubGroup('navsubgroup-operational')">
-            <span class="nav-sub-group-left">
-              <span class="nav-sub-group-dot nav-dot-teal"></span>
-              Operasional
-            </span>
-            <svg class="nav-sub-chevron" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-              <polyline points="6 9 12 15 18 9"/>
+    <!-- ── 4. FINANCIAL PERFORMANCE (collapsible) ── -->
+    <div class="nav-group" id="navgroup-financial-performance">
+      <button class="nav-group-trigger" onclick="toggleNavGroup('navgroup-financial-performance')">
+        <span class="nav-group-trigger-left">
+          <span class="nav-group-icon-wrap nav-icon-purple">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
             </svg>
-          </button>
-          <div class="nav-sub-group-children">
-            <a class="nav-sub-item" data-page="keuangan" href="#" onclick="switchPage('keuangan'); return false;">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-              </svg>
-              Financial Overview
-            </a>
-            <a class="nav-sub-item" data-page="operasional" href="#" onclick="switchPage('operasional'); return false;">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>
-              </svg>
-              Resource Overview
-            </a>
-            <a class="nav-sub-item" data-page="penjualan" href="#" onclick="switchPage('penjualan'); return false;">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-              </svg>
-              Cash Flow Health
-            </a>
-          </div>
-        </div>
-
-        <!-- Sub-group: Financial Performance -->
-        <div class="nav-sub-group" id="navsubgroup-financial">
-          <button class="nav-sub-group-trigger" onclick="toggleNavSubGroup('navsubgroup-financial')">
-            <span class="nav-sub-group-left">
-              <span class="nav-sub-group-dot nav-dot-purple"></span>
-              Financial Performance
-            </span>
-            <svg class="nav-sub-chevron" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div class="nav-sub-group-children">
-            <a class="nav-sub-item" data-page="margin" href="#" onclick="switchPage('margin'); return false;">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
-              </svg>
-              Margin Trends
-            </a>
-            <a class="nav-sub-item" data-page="balance" href="#" onclick="switchPage('balance'); return false;">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3l9 9-9 9-9-9 9-9z"/>
-              </svg>
-              Balance Sheet Trends
-            </a>
-            <a class="nav-sub-item" data-page="kfi" href="#" onclick="switchPage('kfi'); return false;">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              Key Financial Indicators
-            </a>
-          </div>
-        </div>
-
+          </span>
+          Financial Performance
+        </span>
+        <svg class="nav-group-chevron" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      <div class="nav-group-children">
+        <a class="nav-sub-item" data-page="margin" href="#" onclick="switchPage('margin'); return false;">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+          </svg>
+          Margin Trends
+        </a>
+        <a class="nav-sub-item" data-page="balance" href="#" onclick="switchPage('balance'); return false;">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3l9 9-9 9-9-9 9-9z"/>
+          </svg>
+          Balance Sheet Trends
+        </a>
+        <a class="nav-sub-item" data-page="kfi" href="#" onclick="switchPage('kfi'); return false;">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Key Financial Indicators
+        </a>
       </div>
     </div>
 
@@ -470,7 +462,7 @@
           <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
         </svg>
       </span>
-      <span class="nav-item-label">Laporan Keuangan</span>
+      <span class="nav-item-label">Financial Report</span>
     </a>
 
   </nav>
@@ -789,8 +781,7 @@
           <!-- <span class="chart-badge">10 Tahun</span> -->
         </div>
         <div class="chart-body">
-          <iframe id="keu-chart1"
-	          src="http://localhost:3000/public/question/cc5f3355-5e12-442c-b9a1-780f2b9cd21f?titled=false" frameborder="0"></iframe>
+          <canvas id="keu-chart1-canvas"></canvas>
         </div>
       </div>
 
@@ -803,9 +794,7 @@
           <!-- <span class="chart-badge">Komparasi</span> -->
         </div>
         <div class="chart-body">
-          <iframe id="keu-chart2"
-            src="http://localhost:3000/public/question/9cfdc768-ee6f-4e39-8044-a59785117ea7?titled=false"
-            frameborder="0"></iframe>
+          <canvas id="keu-chart2-canvas"></canvas>
         </div>
       </div>
     </div>
@@ -994,9 +983,7 @@
           </div>
         </div>
         <div class="chart-body">
-           <iframe id="ops-chart1"
-            src="http://localhost:3000/public/question/8b501fe6-625f-4fa3-b39a-ef668a435714?titled=false"
-            frameborder="0"></iframe>
+          <canvas id="ops-chart1-canvas"></canvas>
         </div>
       </div>
 
@@ -1008,9 +995,7 @@
           </div>
         </div>
         <div class="chart-body">
-          <iframe id="ops-chart2"
-            src="http://localhost:3000/public/question/cc5f3355-5e12-442c-b9a1-780f2b9cd21f?titled=false"
-            frameborder="0"></iframe>
+          <canvas id="ops-chart2-canvas"></canvas>
         </div>
       </div>
     </div>
@@ -1025,9 +1010,7 @@
           </div>
         </div>
         <div class="chart-body">
-          <iframe id="ops-chart3"
-            src="http://localhost:3000/public/question/acd2f9b1-d901-44ed-b4c1-9ca3efa6f3f1?titled=false"
-            frameborder="0"></iframe>
+          <canvas id="ops-chart3-canvas"></canvas>
         </div>
       </div>
 
@@ -1039,9 +1022,26 @@
           </div>
         </div>
         <div class="chart-body">
-          <iframe id="ops-chart4"
-            src="http://localhost:3000/public/question/efe9aeae-0f2f-486c-99fe-eb6bab863a7e?titled=false"
-            frameborder="0"></iframe>
+          <div class="keu-summary-table-wrap ops-detail-wrap">
+            <table class="keu-summary-table ops-detail-table" id="ops-detail-table">
+              <thead>
+                <tr>
+                  <th>Year</th>
+                  <th>Quarter</th>
+                  <th>OCF</th>
+                  <th>CFI</th>
+                  <th>CFF</th>
+                  <th>TCF</th>
+                  <th>Inflow</th>
+                  <th>Outflow</th>
+                </tr>
+              </thead>
+              <tbody id="ops-detail-tbody">
+                <tr><td colspan="8" class="keu-table-loading">· · ·</td></tr>
+              </tbody>
+            </table>
+            <div class="keu-table-footer" id="ops-detail-rowcount"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1170,22 +1170,22 @@
             <div class="chart-subtitle">Data historis dan rasio EQR</div>
           </div>
         </div>
-        <div class="chart-body-fill pcq-table-frame" style="position:relative; overflow:hidden;">
-          <div class="iframe-loading-placeholder" id="pcq-table-placeholder">
-            <svg width="32" height="32" fill="none" stroke="#CBD5E1" stroke-width="1.5" viewBox="0 0 24 24">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <line x1="3" y1="9" x2="21" y2="9"/>
-              <line x1="3" y1="15" x2="21" y2="15"/>
-              <line x1="9" y1="9" x2="9" y2="21"/>
-            </svg>
-            <span>Menghubungkan ke Metabase…</span>
+        <div class="chart-body-fill pcq-table-frame" style="position:relative; overflow:hidden; display:flex; flex-direction:column;">
+          <div class="keu-summary-table-wrap" style="flex:1; display:flex; flex-direction:column;">
+            <table class="keu-summary-table pcq-laba-table" id="pcq-laba-table">
+              <thead>
+                <tr>
+                  <th>Year</th>
+                  <th>Net Income</th>
+                  <th>OCF</th>
+                  <th>EQR</th>
+                </tr>
+              </thead>
+              <tbody id="pcq-laba-tbody">
+                <tr><td colspan="4" class="keu-table-loading">· · ·</td></tr>
+              </tbody>
+            </table>
           </div>
-          <iframe id="pcq-chart-table-laba"
-            src="http://localhost:3000/public/question/294812b0-f504-400d-9709-9b8e188a2a3a?titled=false"
-            frameborder="0"
-            onload="this.style.opacity='1'; document.getElementById('pcq-table-placeholder').style.display='none';"
-            onerror="document.getElementById('pcq-table-placeholder').innerHTML='<svg width=\'28\' height=\'28\' fill=\'none\' stroke=\'#FCA5A5\' stroke-width=\'1.5\' viewBox=\'0 0 24 24\'><circle cx=\'12\' cy=\'12\' r=\'10\'/><line x1=\'12\' y1=\'8\' x2=\'12\' y2=\'12\'/><line x1=\'12\' y1=\'16\' x2=\'12.01\' y2=\'16\'/></svg><span style=\'color:#EF4444\'>Koneksi Metabase tidak tersedia</span><small>Pastikan Metabase berjalan di localhost:3000</small>';"
-          ></iframe>
         </div>
       </div>
 
@@ -1197,19 +1197,7 @@
           </div>
         </div>
         <div class="chart-body-fill pcq-eqr-frame" style="position:relative; overflow:hidden;">
-          <div class="iframe-loading-placeholder" id="pcq-eqr-placeholder">
-            <svg width="32" height="32" fill="none" stroke="#CBD5E1" stroke-width="1.5" viewBox="0 0 24 24">
-              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
-              <polyline points="16 7 22 7 22 13"/>
-            </svg>
-            <span>Menghubungkan ke Metabase…</span>
-          </div>
-          <iframe id="pcq-chart-eqr-trend"
-            src="http://localhost:3000/public/question/d9e197ac-9786-4707-b8dd-be6242b5725c?titled=false"
-            frameborder="0"
-            onload="this.style.opacity='1'; document.getElementById('pcq-eqr-placeholder').style.display='none';"
-            onerror="document.getElementById('pcq-eqr-placeholder').innerHTML='<svg width=\'28\' height=\'28\' fill=\'none\' stroke=\'#FCA5A5\' stroke-width=\'1.5\' viewBox=\'0 0 24 24\'><circle cx=\'12\' cy=\'12\' r=\'10\'/><line x1=\'12\' y1=\'8\' x2=\'12\' y2=\'12\'/><line x1=\'12\' y1=\'16\' x2=\'12.01\' y2=\'16\'/></svg><span style=\'color:#EF4444\'>Koneksi Metabase tidak tersedia</span><small>Pastikan Metabase berjalan di localhost:3000</small>';"
-          ></iframe>
+          <canvas id="pcq-eqr-trend-canvas"></canvas>
         </div>
       </div>
     </div>
@@ -1340,12 +1328,7 @@
           <span class="kpi-badge up" style="font-size:12px; padding:5px 10px;">↗ +5.8% YoY</span>
         </div>
         <div class="chart-body">
-          <iframe
-            src="http://localhost:3000/public/question/67725a9a-bf3a-4a38-b120-8ad1824241cc?titled=false"
-            data-metabase-src="http://localhost:3000/public/question/67725a9a-bf3a-4a38-b120-8ad1824241cc?titled=false"
-            frameborder="0"
-            class="mg-chart-frame"
-            id="mg-chart-gross"></iframe>
+          <canvas id="mg-chart-gross-canvas"></canvas>
         </div>
       </div>
 
@@ -1359,12 +1342,7 @@
           <span class="kpi-badge" style="font-size:12px; padding:5px 10px; background:#EFF6FF; color:#2563EB;">↗ +3.3% YoY</span>
         </div>
         <div class="chart-body">
-          <iframe
-            src="http://localhost:3000/public/question/654e6a7c-7769-4c6e-a7a4-2a20a7828041?titled=false"
-            data-metabase-src="http://localhost:3000/public/question/654e6a7c-7769-4c6e-a7a4-2a20a7828041?titled=false"
-            frameborder="0"
-            class="mg-chart-frame"
-            id="mg-chart-ebitda"></iframe>
+          <canvas id="mg-chart-ebitda-canvas"></canvas>
         </div>
       </div>
     </div>
@@ -1383,12 +1361,7 @@
           </span>
         </div>
         <div class="chart-body">
-          <iframe
-            src="http://localhost:3000/public/question/6135fa0f-7d65-4b07-bb99-6d512d0b2364?titled=false"
-            data-metabase-src="http://localhost:3000/public/question/6135fa0f-7d65-4b07-bb99-6d512d0b2364?titled=false"
-            frameborder="0"
-            class="mg-chart-frame"
-            id="mg-chart-annual"></iframe>
+          <canvas id="mg-chart-annual-canvas"></canvas>
         </div>
       </div>
 
@@ -1401,13 +1374,25 @@
           </div>
           <!-- <span class="kpi-badge up" style="font-size:12px; padding:5px 10px;">↗ Overall Growth</span> -->
         </div>
-        <div class="chart-body chart-body-table">
-          <iframe
-            src="http://localhost:3000/public/question/5c6039e6-15bb-4c7e-9d31-0199542e1517?titled=false"
-            data-metabase-src="http://localhost:3000/public/question/5c6039e6-15bb-4c7e-9d31-0199542e1517?titled=false"
-            frameborder="0"
-            class="mg-chart-frame"
-            id="mg-chart-table"></iframe>
+        <div class="chart-body-table">
+          <div class="keu-summary-table-wrap">
+            <table class="keu-summary-table" id="mg-summary-table">
+              <thead>
+                <tr>
+                  <th>Year</th>
+                  <th>Quarter</th>
+                  <th>Gross Margin</th>
+                  <th>EBITDA Margin</th>
+                  <th>Operating Margin</th>
+                  <th>Net Margin</th>
+                </tr>
+              </thead>
+              <tbody id="mg-summary-tbody">
+                <tr><td colspan="6" class="keu-table-loading">· · ·</td></tr>
+              </tbody>
+            </table>
+            <div class="keu-table-footer" id="mg-table-rowcount"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1530,18 +1515,13 @@
       <div class="chart-card">
         <div class="chart-header">
           <div>
-            <div class="chart-title">Total Assets &amp; Liabilities</div>
-            <div class="chart-subtitle">Trend of assets and liabilities annually</div>
+            <div class="chart-title">Total Assets Composition</div>
+            <div class="chart-subtitle">Breakdown of total assets by category, per quarter</div>
           </div>
           <span class="kpi-badge up" style="font-size:12px; padding:5px 10px;">↗ Aset Trend</span>
         </div>
         <div class="chart-body">
-          <iframe
-            src="http://localhost:3000/public/question/048f79e4-333a-447b-83f5-78b8dc754994?titled=false"
-            data-metabase-src="http://localhost:3000/public/question/048f79e4-333a-447b-83f5-78b8dc754994?titled=false"
-            frameborder="0"
-            class="bs-chart-frame"
-            id="bs-chart1"></iframe>
+          <canvas id="bs-chart1-canvas"></canvas>
         </div>
       </div>
 
@@ -1554,12 +1534,7 @@
           <span class="kpi-badge" style="font-size:12px; padding:5px 10px; background:#EFF6FF; color:#2563EB;">↗ +4.8% YoY</span>
         </div>
         <div class="chart-body">
-          <iframe
-            src="http://localhost:3000/public/question/ff0ec1c3-0531-4e50-a0bd-960f30e27166?titled=false"
-            data-metabase-src="http://localhost:3000/public/question/ff0ec1c3-0531-4e50-a0bd-960f30e27166?titled=false"
-            frameborder="0"
-            class="bs-chart-frame"
-            id="bs-chart2"></iframe>
+          <canvas id="bs-chart2-canvas"></canvas>
         </div>
       </div>
     </div>
@@ -1578,12 +1553,7 @@
           </span>
         </div>
         <div class="chart-body">
-          <iframe
-            src="http://localhost:3000/public/question/0a87c31d-3dc1-44dd-924c-116d3ab7522c?titled=false"
-            data-metabase-src="http://localhost:3000/public/question/0a87c31d-3dc1-44dd-924c-116d3ab7522c?titled=false"
-            frameborder="0"
-            class="bs-chart-frame"
-            id="bs-chart3"></iframe>
+          <canvas id="bs-chart3-canvas"></canvas>
         </div>
       </div>
 
@@ -1595,13 +1565,8 @@
           </div>
           <span class="kpi-badge up" style="font-size:12px; padding:5px 10px;">↗ Overall Growth</span>
         </div>
-        <div class="chart-body chart-body-table">
-          <iframe
-            src="http://localhost:3000/public/question/ee26e79e-3302-44fb-b453-4210f11687ff?titled=false"
-            data-metabase-src="http://localhost:3000/public/question/ee26e79e-3302-44fb-b453-4210f11687ff?titled=false"
-            frameborder="0"
-            class="bs-chart-frame"
-            id="bs-chart4"></iframe>
+        <div class="chart-body">
+          <canvas id="bs-chart4-canvas"></canvas>
         </div>
       </div>
     </div>
@@ -1805,12 +1770,12 @@
     <!-- ── KFI: Charts Row ── -->
     <div class="charts-row kfi-charts-row">
 
-      <!-- Chart 1: Dividend History — Bar + Line -->
+      <!-- Chart 1: Trend Working Capital Ratio — Line -->
       <div class="chart-card">
         <div class="chart-header">
           <div>
             <div class="chart-title"> Trend Working Capital Ratio </div>
-            <div class="chart-subtitle">Dividend per share (bar) &amp; dividend yield (line) — historis tahunan</div>
+            <div class="chart-subtitle">Current assets ÷ current liabilities — historis per kuartal</div>
           </div>
           <span class="kpi-badge" style="font-size:12px; padding:5px 10px; background:#FEF3C7; color:#B45309; border:1px solid #FDE68A;">
 
@@ -1818,13 +1783,7 @@
           </span>
         </div>
         <div class="chart-body kfi-chart-body">
-          <iframe
-            src="http://localhost:3000/public/question/a71cbf60-cfe4-4a8d-ab98-953197c4dccf"
-            data-metabase-src="http://localhost:3000/public/question/a71cbf60-cfe4-4a8d-ab98-953197c4dccf?titled=false"
-            frameborder="0"
-            class="kfi-chart-frame"
-            id="kfi-chart-dividen">
-          </iframe>
+          <canvas id="kfi-chart-wc-canvas"></canvas>
         </div>
       </div>
 
@@ -1841,13 +1800,7 @@
           </span>
         </div>
         <div class="chart-body kfi-chart-body">
-          <iframe
-            src="http://localhost:3000/public/question/61a66e12-6222-4004-b731-f812c1192521?titled=false"
-            data-metabase-src="http://localhost:3000/public/question/61a66e12-6222-4004-b731-f812c1192521?titled=false"
-            frameborder="0"
-            class="kfi-chart-frame"
-            id="kfi-chart-returns">
-          </iframe>
+          <canvas id="kfi-chart-returns-canvas"></canvas>
         </div>
       </div>
 

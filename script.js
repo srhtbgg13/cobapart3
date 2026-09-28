@@ -1,7 +1,11 @@
 // ── AUTH: JWT-based (data dari database, bukan hard-coded) ────────
-// const API_BASE = 'http://localhost:5000';
+// API_BASE otomatis menyesuaikan: kalau dibuka dari localhost/127.0.0.1
+// (mis. Live Server / python -m http.server), pakai backend Flask lokal.
+// Kalau dibuka dari domain lain (GitHub Pages, dsb), pakai backend production.
 
-const API_BASE = "https://horn-southwest-total-liverpool.trycloudflare.com";
+const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+const API_BASE = isLocalHost ? "http://127.0.0.1:5000" : window.location.origin;
 
 // Simpan & ambil token dari sessionStorage (sesi hanya berlaku selama tab terbuka)
 function saveToken(token)  { sessionStorage.setItem('auth_token', token); }
@@ -265,24 +269,17 @@ admin: {
 
 /* ── MAP: page → nav group yang harus dibuka otomatis ── */
 const pageToNavGroup = {
-  // Dashboard Keuangan group
-  keuangan:    'navgroup-dashboard',
-  operasional: 'navgroup-dashboard',
-  penjualan:   'navgroup-dashboard',
-  margin:      'navgroup-dashboard',
-  balance:     'navgroup-dashboard',
-  kfi:         'navgroup-dashboard',
+  // Arus Kas (Cash Flow) group
+  operasional: 'navgroup-arus-kas',
+  penjualan:   'navgroup-arus-kas',
+  // Financial Performance group
+  margin:      'navgroup-financial-performance',
+  balance:     'navgroup-financial-performance',
+  kfi:         'navgroup-financial-performance',
 };
 
-/* ── SUB-GROUP mapping (page → sub-group) ── */
-const pageToSubGroup = {
-  keuangan:    'navsubgroup-operational',
-  operasional: 'navsubgroup-operational',
-  penjualan:   'navsubgroup-operational',
-  margin:      'navsubgroup-financial',
-  balance:     'navsubgroup-financial',
-  kfi:         'navsubgroup-financial',
-};
+/* ── SUB-GROUP mapping (tidak dipakai lagi — struktur sidebar sudah flat) ── */
+const pageToSubGroup = {};
 
 /* ── Toggle collapsible nav group ── */
 function toggleNavGroup(groupId) {
@@ -431,11 +428,212 @@ function initQuarterBtns(groupId, hiddenInputId, onChangeCallback) {
   });
 }
 
-/* ── 4. KEUANGAN FILTERS ── */
-const KEU = {
-  "keu-chart1": "http://localhost:3000/public/question/cc5f3355-5e12-442c-b9a1-780f2b9cd21f?titled=false",
-  "keu-chart2": "http://localhost:3000/public/question/9cfdc768-ee6f-4e39-8044-a59785117ea7?titled=false",
-};
+/* ── 4. KEUANGAN FILTERS ──
+   keu-chart1 & keu-chart2 sudah full Chart.js (lihat renderOCFChart & renderComparisonChart),
+   jadi tidak perlu lagi dipetakan ke iframe Metabase di sini. */
+const KEU = {};
+
+/* ── Operating Cash Flow Trend (Chart.js, gantikan keu-chart1) ── */
+let keuOcfChartInstance = null;
+const KEU_QUARTER_ORDER = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+
+function renderOCFChart(rows, activeQuarter) {
+  const canvas = document.getElementById('keu-chart1-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (keuOcfChartInstance) { keuOcfChartInstance.destroy(); keuOcfChartInstance = null; }
+  if (!rows || !rows.length) return;
+
+  // Urutkan ascending (tahun lalu quarter), karena API mengembalikan DESC
+  const sorted = rows.slice().sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return KEU_QUARTER_ORDER[a.quarter] - KEU_QUARTER_ORDER[b.quarter];
+  });
+
+  const labels = sorted.map(r => `${r.year} - ${r.quarter}`);
+  const values = sorted.map(r => Number((r.ocf_raw / 1_000_000).toFixed(2)));
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#2563EB';
+
+  // Titik yang cocok dengan filter kuartal aktif di-highlight; garis tren tetap utuh
+  // (menghindari filter "memotong" konteks tren — lihat catatan usability)
+  const pointRadius      = sorted.map(r => (activeQuarter && r.quarter === activeQuarter) ? 8 : 4);
+  const pointHoverRadius = pointRadius.map(r => r + 2);
+  const pointBg          = sorted.map(r => (activeQuarter && r.quarter === activeQuarter) ? accent : '#fff');
+  const pointBorderW     = sorted.map(r => (activeQuarter && r.quarter === activeQuarter) ? 3 : 2);
+
+  // Sumbu Y tidak dipaksa mulai dari 0 — CFO bisa minus, jadi biarkan
+  // auto-scale mengikuti data (dengan padding) supaya titik negatif tetap terlihat.
+  const minVal = Math.min(...values, 0);
+  const maxVal = Math.max(...values, 0);
+  const suggestedMin = minVal < 0 ? Math.floor(minVal) - 1 : 0;
+  const suggestedMax = Math.ceil(maxVal) + 1;
+
+  keuOcfChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Operating Cash Flow',
+        data: values,
+        borderColor: accent,
+        backgroundColor: 'rgba(37,99,235,0.08)',
+        borderWidth: 2.5,
+        pointRadius,
+        pointHoverRadius,
+        pointBackgroundColor: pointBg,
+        pointBorderColor: accent,
+        pointBorderWidth: pointBorderW,
+        tension: 0.35,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `Rp${ctx.parsed.y.toFixed(2)}T` } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: {
+          suggestedMin,
+          suggestedMax,
+          title: { display: true, text: 'Operating Cash Flow (Rp)', font: { size: 11 } },
+          ticks: { stepSize: 1, callback: (val) => `Rp${val}T` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── Net Income vs. Operating Cash Flow (Chart.js, gantikan keu-chart2 Metabase) ── */
+let keuComparisonChartInstance = null;
+
+function renderComparisonChart(rows, activeQuarter) {
+  const canvas = document.getElementById('keu-chart2-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (keuComparisonChartInstance) { keuComparisonChartInstance.destroy(); keuComparisonChartInstance = null; }
+  if (!rows || !rows.length) return;
+
+  const sorted = rows.slice().sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return KEU_QUARTER_ORDER[a.quarter] - KEU_QUARTER_ORDER[b.quarter];
+  });
+
+  const labels    = sorted.map(r => `${r.year} - ${r.quarter}`);
+  const ocfValues = sorted.map(r => Number((r.ocf_raw / 1_000_000).toFixed(2)));
+  const niValues  = sorted.map(r => Number((r.net_income_raw / 1_000_000).toFixed(2)));
+
+  const blue   = getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#2563EB';
+  const orange = '#F97316';
+
+  const pointRadiusFor      = r => (activeQuarter && r.quarter === activeQuarter) ? 7 : 4;
+  const ocfPointRadius      = sorted.map(pointRadiusFor);
+  const niPointRadius       = sorted.map(pointRadiusFor);
+  const ocfPointHoverRadius = ocfPointRadius.map(r => r + 2);
+  const niPointHoverRadius  = niPointRadius.map(r => r + 2);
+
+  // Sumbu Y mengikuti nilai terbesar dari kedua seri, dengan sedikit padding di atas
+  const allValues     = [...ocfValues, ...niValues];
+  const minVal         = Math.min(...allValues, 0);
+  const maxVal         = Math.max(...allValues, 0);
+  const suggestedMin   = minVal < 0 ? Math.floor(minVal) - 1 : 0;
+  const suggestedMax   = Math.ceil(maxVal * 1.15 * 2) / 2; // dibulatkan ke 0.5 terdekat
+
+  keuComparisonChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Net Income',
+          data: niValues,
+          borderColor: orange,
+          backgroundColor: 'rgba(249,115,22,0.08)',
+          borderWidth: 2.5,
+          pointRadius: niPointRadius,
+          pointHoverRadius: niPointHoverRadius,
+          pointBackgroundColor: orange,
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          tension: 0.35,
+          fill: false
+        },
+        {
+          label: 'OCF',
+          data: ocfValues,
+          borderColor: blue,
+          backgroundColor: 'rgba(37,99,235,0.08)',
+          borderWidth: 2.5,
+          pointRadius: ocfPointRadius,
+          pointHoverRadius: ocfPointHoverRadius,
+          pointBackgroundColor: blue,
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          tension: 0.35,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'start',
+          labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } }
+        },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: Rp${ctx.parsed.y.toFixed(2)}T` } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: {
+          suggestedMin,
+          suggestedMax,
+          title: { display: true, text: 'Amount (IDR Trillion)', font: { size: 11 } },
+          ticks: { callback: (val) => `Rp${val}T` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
+/* Chart selalu ambil data 1 tahun PENUH (kuartal sengaja tidak dikirim ke API)
+   supaya tren 4 kuartal tetap utuh walau ada filter kuartal aktif. */
+async function loadOCFChartFullYear(tahun, activeQuarter) {
+  const params = new URLSearchParams();
+  if (tahun) params.set('tahun', tahun);
+
+  let rows = [];
+  try {
+    const res  = await fetch(`${API_BASE}/api/tabel/keuangan?${params}`);
+    const data = await res.json();
+    if (data.ada_data) rows = data.rows;
+  } catch (_) { /* chart dibiarkan kosong kalau fetch gagal */ }
+
+  renderOCFChart(rows, activeQuarter);
+  renderComparisonChart(rows, activeQuarter);
+}
 
 /* ── Render tabel ringkasan keuangan dari Flask API ── */
 async function renderKeuTable(tahun, kuartal) {
@@ -456,6 +654,7 @@ async function renderKeuTable(tahun, kuartal) {
     if (!data.ada_data || !data.rows.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="keu-table-loading">Tidak ada data</td></tr>';
       if (rowcount) rowcount.textContent = '0 rows';
+      loadOCFChartFullYear(tahun, kuartal);
       return;
     }
 
@@ -470,11 +669,61 @@ async function renderKeuTable(tahun, kuartal) {
       </tr>`).join('');
 
     if (rowcount) rowcount.textContent = `${data.total} rows`;
+
+    loadOCFChartFullYear(tahun, kuartal);
   } catch (_) {
     tbody.innerHTML = '<tr><td colspan="6" class="keu-table-loading">Gagal memuat data</td></tr>';
     if (rowcount) rowcount.textContent = '';
   }
 }
+
+/* ── Render tabel Quarterly Cash Flow Details dari Flask API (gantikan ops-chart4 Metabase) ──
+   TCF (Total Cash Flow) dihitung di sisi client sebagai OCF + CFI + CFF,
+   format samakan dengan fmt_rupiah di backend ("X.XX T"). */
+async function renderOpsDetailTable(tahun, kuartal) {
+  const tbody    = document.getElementById('ops-detail-tbody');
+  const rowcount = document.getElementById('ops-detail-rowcount');
+  if (!tbody) return;
+
+  tbody.innerHTML = '<tr><td colspan="8" class="keu-table-loading">· · ·</td></tr>';
+
+  const params = new URLSearchParams();
+  if (tahun)   params.set('tahun',   tahun);
+  if (kuartal) params.set('kuartal', kuartal);
+
+  try {
+    const res  = await fetch(`${API_BASE}/api/tabel/keuangan?${params}`);
+    const data = await res.json();
+
+    if (!data.ada_data || !data.rows.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="keu-table-loading">Tidak ada data</td></tr>';
+      if (rowcount) rowcount.textContent = '0 rows';
+      return;
+    }
+
+    tbody.innerHTML = data.rows.map(r => {
+      const tcfRaw = (r.ocf_raw || 0) + (r.cfi_raw || 0) + (r.cff_raw || 0);
+      const tcf    = `${(tcfRaw / 1_000_000).toFixed(2)} T`;
+      return `
+      <tr>
+        <td>${r.year}</td>
+        <td>${r.quarter}</td>
+        <td class="num">${r.ocf}</td>
+        <td class="num">${r.cfi}</td>
+        <td class="num">${r.cff}</td>
+        <td class="num">${tcf}</td>
+        <td class="num">${r.inflow}</td>
+        <td class="num">${r.outflow}</td>
+      </tr>`;
+    }).join('');
+
+    if (rowcount) rowcount.textContent = `${data.total} rows`;
+  } catch (_) {
+    tbody.innerHTML = '<tr><td colspan="8" class="keu-table-loading">Gagal memuat data</td></tr>';
+    if (rowcount) rowcount.textContent = '';
+  }
+}
+
 
 function updateKeuangan() {
   const params = new URLSearchParams();
@@ -502,13 +751,11 @@ const _keuYearFilterEl = document.getElementById("keu-yearFilter");
 if (_keuYearFilterEl) _keuYearFilterEl.addEventListener("change", updateKeuangan);
 initQuarterBtns('keu-quarterBtns', 'keu-quarterFilter', updateKeuangan);
 
-/* ── 5. OPERASIONAL FILTERS ── */
-const OPS = {
-  "ops-chart1": "http://localhost:3000/public/question/8b501fe6-625f-4fa3-b39a-ef668a435714?titled=false",
-  "ops-chart2": "http://localhost:3000/public/question/cc5f3355-5e12-442c-b9a1-780f2b9cd21f?titled=false",
-  "ops-chart3": "http://localhost:3000/public/question/acd2f9b1-d901-44ed-b4c1-9ca3efa6f3f1?titled=false",
-  "ops-chart4": "http://localhost:3000/public/question/efe9aeae-0f2f-486c-99fe-eb6bab863a7e?titled=false",
-};
+/* ── 5. OPERASIONAL FILTERS ──
+   ops-chart1 (Cash Flow Composition), ops-chart2 (OCF Trend), ops-chart3
+   (Cash Inflow vs Outflow) & ops-chart4 (Quarterly Cash Flow Details table)
+   sudah full Chart.js / Flask API, jadi map iframe Metabase ini sudah kosong. */
+const OPS = {};
 
 function updateOps() {
   const params = new URLSearchParams();
@@ -525,15 +772,306 @@ function updateOps() {
     const el = document.getElementById(id);
     if (el) el.src = qs ? `${base}&${qs}` : base;
   });
+
+  loadOpsCompositionChart(y, q);
+  renderOpsDetailTable(y, q);
 }
 
 initQuarterBtns('ops-quarterBtns', 'ops-catFilter', updateOps);
 
-/* ── 6. PROFIT VS CASH QUALITY FILTERS ── */
-const PCQ_BASES = {
-  "pcq-chart-eqr-trend": "http://localhost:3000/public/question/d9e197ac-9786-4707-b8dd-be6242b5725c?titled=false",
-  "pcq-chart-table-laba": "http://localhost:3000/public/question/294812b0-f504-400d-9709-9b8e188a2a3a?titled=false",
-};
+/* ── Cash Flow Composition by Activity (Chart.js, gantikan ops-chart1 Metabase) ──
+   Stacked bar per kuartal: CFF (merah), CFI (biru), CFO (hijau).
+   Pakai endpoint /api/tabel/keuangan yang sama dengan chart Financial Overview
+   (sekarang sudah ikut mengembalikan cfi_raw & cff_raw). */
+let opsCompositionChartInstance = null;
+
+function renderCashFlowCompositionChart(rows, activeQuarter) {
+  const canvas = document.getElementById('ops-chart1-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (opsCompositionChartInstance) { opsCompositionChartInstance.destroy(); opsCompositionChartInstance = null; }
+  if (!rows || !rows.length) return;
+
+  const sorted = rows.slice().sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return KEU_QUARTER_ORDER[a.quarter] - KEU_QUARTER_ORDER[b.quarter];
+  });
+
+  const labels     = sorted.map(r => `${r.year} - ${r.quarter}`);
+  const cffValues  = sorted.map(r => Number((r.cff_raw / 1_000_000).toFixed(2)));
+  const cfiValues  = sorted.map(r => Number((r.cfi_raw / 1_000_000).toFixed(2)));
+  const cfoValues  = sorted.map(r => Number((r.ocf_raw / 1_000_000).toFixed(2)));
+
+  const red   = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()  || '#C0392B';
+  const blue  = getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#2563EB';
+  const green = '#84CC16';
+
+  // Bar aktif (kuartal terpilih) sedikit lebih tebal opacity-nya, sisanya diredupkan
+  const alphaFor = r => (activeQuarter && r.quarter === activeQuarter) ? 1 : 0.85;
+  const hexToRgba = (hex, a) => {
+    const v = hex.replace('#', '');
+    const n = parseInt(v.length === 3 ? v.split('').map(c => c + c).join('') : v, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+
+  const allValues   = [...cffValues, ...cfiValues, ...cfoValues];
+  const minVal      = Math.min(...allValues, 0);
+  const maxVal      = Math.max(...allValues, 0);
+  const suggestedMin = Math.floor(minVal) - 0.5;
+  const suggestedMax = Math.ceil(maxVal) + 0.5;
+
+  opsCompositionChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'CFF',
+          data: cffValues,
+          backgroundColor: sorted.map(r => hexToRgba(red, alphaFor(r))),
+          borderRadius: 3,
+          stack: 'cf'
+        },
+        {
+          label: 'CFI',
+          data: cfiValues,
+          backgroundColor: sorted.map(r => hexToRgba(blue, alphaFor(r))),
+          borderRadius: 3,
+          stack: 'cf'
+        },
+        {
+          label: 'CFO',
+          data: cfoValues,
+          backgroundColor: sorted.map(r => hexToRgba(green, alphaFor(r))),
+          borderRadius: 3,
+          stack: 'cf'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'start',
+          labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } }
+        },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: Rp${ctx.parsed.y.toFixed(2)}T` } }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: {
+          stacked: true,
+          suggestedMin,
+          suggestedMax,
+          title: { display: true, text: 'Cash Flow (Rp Trillion)', font: { size: 11 } },
+          ticks: { callback: (val) => `Rp${val}T` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── Operating Cash Flow Trend (page Resource Overview, gantikan ops-chart2 Metabase) ──
+   Sama persis dengan renderOCFChart di Financial Overview, tapi target canvas & instance
+   terpisah karena beda halaman dan beda filter (ops-yearFilter / ops-catFilter). */
+let opsOcfChartInstance = null;
+
+function renderOpsOcfTrendChart(rows, activeQuarter) {
+  const canvas = document.getElementById('ops-chart2-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (opsOcfChartInstance) { opsOcfChartInstance.destroy(); opsOcfChartInstance = null; }
+  if (!rows || !rows.length) return;
+
+  const sorted = rows.slice().sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return KEU_QUARTER_ORDER[a.quarter] - KEU_QUARTER_ORDER[b.quarter];
+  });
+
+  const labels = sorted.map(r => `${r.year} - ${r.quarter}`);
+  const values = sorted.map(r => Number((r.ocf_raw / 1_000_000).toFixed(2)));
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#2563EB';
+
+  const pointRadius      = sorted.map(r => (activeQuarter && r.quarter === activeQuarter) ? 8 : 4);
+  const pointHoverRadius = pointRadius.map(r => r + 2);
+  const pointBg          = sorted.map(r => (activeQuarter && r.quarter === activeQuarter) ? accent : '#fff');
+  const pointBorderW     = sorted.map(r => (activeQuarter && r.quarter === activeQuarter) ? 3 : 2);
+
+  const minVal = Math.min(...values, 0);
+  const maxVal = Math.max(...values, 0);
+  const suggestedMin = minVal < 0 ? Math.floor(minVal) - 1 : 0;
+  const suggestedMax = Math.ceil(maxVal) + 1;
+
+  opsOcfChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Operating Cash Flow',
+        data: values,
+        borderColor: accent,
+        backgroundColor: 'rgba(37,99,235,0.08)',
+        borderWidth: 2.5,
+        pointRadius,
+        pointHoverRadius,
+        pointBackgroundColor: pointBg,
+        pointBorderColor: accent,
+        pointBorderWidth: pointBorderW,
+        tension: 0.35,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `Rp${ctx.parsed.y.toFixed(2)}T` } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: {
+          suggestedMin,
+          suggestedMax,
+          title: { display: true, text: 'Operating Cash Flow (Rp)', font: { size: 11 } },
+          ticks: { stepSize: 1, callback: (val) => `Rp${val}T` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── Cash Inflow vs Outflow (gantikan ops-chart3 Metabase) ──
+   Grouped bar (bukan stacked): inflow (hijau) tampil di atas 0, outflow (merah)
+   biasanya sudah negatif di DB sehingga otomatis turun ke bawah 0. */
+let opsInOutChartInstance = null;
+
+function renderInflowOutflowChart(rows, activeQuarter) {
+  const canvas = document.getElementById('ops-chart3-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (opsInOutChartInstance) { opsInOutChartInstance.destroy(); opsInOutChartInstance = null; }
+  if (!rows || !rows.length) return;
+
+  const sorted = rows.slice().sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return KEU_QUARTER_ORDER[a.quarter] - KEU_QUARTER_ORDER[b.quarter];
+  });
+
+  const labels        = sorted.map(r => `${r.year} - ${r.quarter}`);
+  const inflowValues  = sorted.map(r => Number((r.inflow_raw  / 1_000_000).toFixed(2)));
+  const outflowValues = sorted.map(r => Number((r.outflow_raw / 1_000_000).toFixed(2)));
+
+  const green = '#84CC16';
+  const red   = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#C0392B';
+
+  const alphaFor = r => (activeQuarter && r.quarter === activeQuarter) ? 1 : 0.85;
+  const hexToRgba = (hex, a) => {
+    const v = hex.replace('#', '');
+    const n = parseInt(v.length === 3 ? v.split('').map(c => c + c).join('') : v, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+
+  const allValues     = [...inflowValues, ...outflowValues];
+  const minVal        = Math.min(...allValues, 0);
+  const maxVal        = Math.max(...allValues, 0);
+  const suggestedMin  = Math.floor(minVal) - 0.5;
+  const suggestedMax  = Math.ceil(maxVal) + 0.5;
+
+  opsInOutChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Inflow',
+          data: inflowValues,
+          backgroundColor: sorted.map(r => hexToRgba(green, alphaFor(r))),
+          borderRadius: 3
+        },
+        {
+          label: 'Outflow',
+          data: outflowValues,
+          backgroundColor: sorted.map(r => hexToRgba(red, alphaFor(r))),
+          borderRadius: 3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'start',
+          labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } }
+        },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: Rp${ctx.parsed.y.toFixed(2)}T` } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: {
+          suggestedMin,
+          suggestedMax,
+          title: { display: true, text: 'Cash Flow (Rp Trillion)', font: { size: 11 } },
+          ticks: { callback: (val) => `Rp${val}T` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
+/* Chart selalu ambil data 1 tahun PENUH (kuartal sengaja tidak dikirim ke API)
+   supaya keempat kuartal tetap tampil walau ada filter kuartal aktif. */
+async function loadOpsCompositionChart(tahun, activeQuarter) {
+  const params = new URLSearchParams();
+  if (tahun) params.set('tahun', tahun);
+
+  let rows = [];
+  try {
+    const res  = await fetch(`${API_BASE}/api/tabel/keuangan?${params}`);
+    const data = await res.json();
+    if (data.ada_data) rows = data.rows;
+  } catch (_) { /* chart dibiarkan kosong kalau fetch gagal */ }
+
+  renderCashFlowCompositionChart(rows, activeQuarter);
+  renderOpsOcfTrendChart(rows, activeQuarter);
+  renderInflowOutflowChart(rows, activeQuarter);
+}
+
+/* ── 6. PROFIT VS CASH QUALITY FILTERS ──
+   pcq-chart-table-laba sudah full HTML table (lihat renderPcqLabaTable) dan
+   pcq-chart-eqr-trend sudah jadi Chart.js native (lihat renderPcqEqrTrendChart),
+   jadi map iframe Metabase untuk page ini sudah kosong / tidak dipakai lagi. */
 
 function updatePCQ() {
   const y = document.getElementById("pcq-yearFilter").value;
@@ -542,28 +1080,13 @@ function updatePCQ() {
   const showEl = document.getElementById('pcq-showingYear');
   if (showEl) showEl.textContent = y || 'All Years';
 
-  // Update Metabase iframes
-  Object.entries(PCQ_BASES).forEach(([id, base]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const params = new URLSearchParams();
-    if (y) params.set("year", y);
-    if (q) params.set("quarter", q);
-    const qs = params.toString();
-    const freshUrl = (qs ? `${base}&${qs}` : base) + '&_t=' + Date.now();
-    el.style.opacity = '0';
-    // Show placeholder saat reload
-    const placeholderId = id === 'pcq-chart-table-laba' ? 'pcq-table-placeholder' : 'pcq-eqr-placeholder';
-    const ph = document.getElementById(placeholderId);
-    if (ph) ph.style.display = 'flex';
-    el.src = 'about:blank';
-    setTimeout(() => { el.src = freshUrl; }, 80);
-  });
-
   // Update scatter plot filter
   if (typeof window.pcqScatterSetFilter === 'function') {
     window.pcqScatterSetFilter(y ? parseInt(y) : null, q || null);
   }
+
+  renderPcqLabaTable(y);
+  renderPcqEqrTrendChart(y);
 }
 
 initQuarterBtns('pcq-quarterBtns', 'pcq-quarterFilter', updatePCQ);
@@ -580,37 +1103,340 @@ const fcfYearEl = document.getElementById("fcf-yearFilter");
 if (fcfYearEl) fcfYearEl.addEventListener("change", updateFCF);
 initQuarterBtns('fcf-quarterBtns', 'fcf-quarterFilter', updateFCF);
 
-/* ── 8. MARGIN TRENDS FILTERS ── */
-const MG_BASES = {
-  // Chart 1 — Gross Margin Performance (UUID sudah dikonfirmasi)
-  "mg-chart-gross":  "http://localhost:3000/public/question/67725a9a-bf3a-4a38-b120-8ad1824241cc?titled=false",
-  // Chart 2 — EBITDA Margin Performance (ganti UUID_EBITDA dengan UUID asli dari Metabase)
-  "mg-chart-ebitda": "http://localhost:3000/public/question/654e6a7c-7769-4c6e-a7a4-2a20a7828041?titled=false",
-  // Chart 3 — Annual Margin Trend (ganti UUID_ANNUAL dengan UUID asli dari Metabase)
-  "mg-chart-annual": "http://localhost:3000/public/question/6135fa0f-7d65-4b07-bb99-6d512d0b2364?titled=false",
-  // Chart 4 — Margin Summary Table (ganti UUID_TABLE dengan UUID asli dari Metabase)
-  "mg-chart-table":  "http://localhost:3000/public/question/5c6039e6-15bb-4c7e-9d31-0199542e1517?titled=false",
-};
-
+/* ── 8. MARGIN TRENDS FILTERS ──
+   Semua 4 chart/tabel di page ini (Gross, EBITDA, Annual Trend, Summary
+   Table) sekarang full Chart.js/HTML native — tidak ada lagi iframe
+   Metabase yang perlu di-refresh src-nya di sini. */
 function updateMargin() {
-  const params = new URLSearchParams();
   const y = document.getElementById("mg-yearFilter").value;
   const q = document.getElementById("mg-quarterFilter").value;
-  if (y) params.set("year",    y);
-  if (q) params.set("quarter", q);
-  const qs = params.toString();
 
   const showEl = document.getElementById('mg-showingYear');
   if (showEl) showEl.textContent = y || 'All Years';
 
-  Object.entries(MG_BASES).forEach(([id, base]) => {
-    const el = document.getElementById(id);
-    if (el) el.src = qs ? `${base}&${qs}` : base;
-  });
+  renderMgGrossChart(y, q);
+  renderMgEbitdaChart(y, q);
+  renderMgAnnualChart(y, q);
+  renderMgSummaryTable(y, q);
 }
 
 const mgYearEl = document.getElementById("mg-yearFilter");
 initQuarterBtns('mg-quarterBtns', 'mg-quarterFilter', updateMargin);
+
+/* ── Chart 1 & 2: Gross Margin / EBITDA Margin Performance
+   (gantikan mg-chart-gross & mg-chart-ebitda Metabase) ──
+   Data revenue, gross_profit, operating_income & da_expense per kuartal
+   diambil dari backend Flask (GET /api/tabel/margin), lalu Gross Margin &
+   EBITDA Margin dihitung di frontend pakai rumus yang sama untuk ketiga
+   seri di masing-masing chart — Actual, Last Year, dan Target — bedanya
+   cuma tahun acuannya:
+     Actual     = tahun acuan (Y)
+     Last Year  = tahun acuan - 1
+     Target     = tahun acuan - 2
+   Tahun acuan (Y) = tahun yang dipilih di filter, atau tahun terbaru yang
+   tersedia kalau "All Years". Pola ini dikonfirmasi cocok dengan angka di
+   kedua chart Metabase asli (Actual=2025, Last Year=2024, Target=2023).
+
+   MG_MARGIN_FALLBACK dipakai HANYA kalau fetch ke backend gagal (mis.
+   server Flask belum jalan) — snapshot data 2016–2025 dari
+   dataindocement.csv, supaya chart tidak kosong total saat offline. */
+let MG_MARGIN_DATA = [];
+const MG_MARGIN_FALLBACK = [
+  {year:2016,quarter:'Q1',gm:43.23,em:33.85},{year:2016,quarter:'Q2',gm:40.29,em:29.51},{year:2016,quarter:'Q3',gm:41.38,em:29.53},{year:2016,quarter:'Q4',gm:39.97,em:27.85},
+  {year:2017,quarter:'Q1',gm:34.47,em:22.87},{year:2017,quarter:'Q2',gm:34.01,em:20.87},{year:2017,quarter:'Q3',gm:34.85,em:22.08},{year:2017,quarter:'Q4',gm:35.30,em:18.97},
+  {year:2018,quarter:'Q1',gm:28.69,em:16.20},{year:2018,quarter:'Q2',gm:23.41,em:10.28},{year:2018,quarter:'Q3',gm:27.49,em:14.36},{year:2018,quarter:'Q4',gm:33.74,em:19.65},
+  {year:2019,quarter:'Q1',gm:31.17,em:18.81},{year:2019,quarter:'Q2',gm:30.12,em:14.46},{year:2019,quarter:'Q3',gm:35.16,em:20.87},{year:2019,quarter:'Q4',gm:39.70,em:22.27},
+  {year:2020,quarter:'Q1',gm:31.65,em:21.34},{year:2020,quarter:'Q2',gm:28.99,em: 8.34},{year:2020,quarter:'Q3',gm:39.19,em:26.33},{year:2020,quarter:'Q4',gm:41.54,em:31.70},
+  {year:2021,quarter:'Q1',gm:31.98,em:21.26},{year:2021,quarter:'Q2',gm:30.80,em:17.02},{year:2021,quarter:'Q3',gm:38.01,em:27.46},{year:2021,quarter:'Q4',gm:36.85,em:23.08},
+  {year:2022,quarter:'Q1',gm:27.00,em:13.80},{year:2022,quarter:'Q2',gm:24.11,em:21.86},{year:2022,quarter:'Q3',gm:35.24,em:17.12},{year:2022,quarter:'Q4',gm:36.44,em:30.37},
+  {year:2023,quarter:'Q1',gm:30.05,em:18.19},{year:2023,quarter:'Q2',gm:31.04,em:19.29},{year:2023,quarter:'Q3',gm:33.41,em:20.95},{year:2023,quarter:'Q4',gm:35.01,em:22.44},
+  {year:2024,quarter:'Q1',gm:28.91,em:16.78},{year:2024,quarter:'Q2',gm:27.66,em:16.02},{year:2024,quarter:'Q3',gm:34.35,em:23.08},{year:2024,quarter:'Q4',gm:37.83,em:26.87},
+  {year:2025,quarter:'Q1',gm:28.16,em:15.94},{year:2025,quarter:'Q2',gm:30.13,em:17.65},{year:2025,quarter:'Q3',gm:34.87,em:22.83},{year:2025,quarter:'Q4',gm:35.83,em:24.61},
+];
+
+function mgMaxYear() {
+  const src = MG_MARGIN_DATA.length ? MG_MARGIN_DATA : MG_MARGIN_FALLBACK;
+  return src.length ? Math.max(...src.map(d => d.year)) : new Date().getFullYear();
+}
+
+function mgFindVal(year, quarter, key) {
+  const src = MG_MARGIN_DATA.length ? MG_MARGIN_DATA : MG_MARGIN_FALLBACK;
+  const row = src.find(d => d.year === year && d.quarter === quarter);
+  return row ? row[key] : null;
+}
+const mgFindGm = (year, quarter) => mgFindVal(year, quarter, 'gm');
+const mgFindEm = (year, quarter) => mgFindVal(year, quarter, 'em');
+// Catatan: MG_MARGIN_FALLBACK belum punya field 'om' (operating margin) & 'nm'
+// (net margin), jadi kalau backend gagal di-fetch, garis/kolom itu akan kosong
+// (fallback cuma menjaga Gross & EBITDA tetap tampil).
+const mgFindOm = (year, quarter) => mgFindVal(year, quarter, 'om');
+const mgFindNm = (year, quarter) => mgFindVal(year, quarter, 'nm');
+
+/* Fetch sekali saat aplikasi dibuka (data historis, tidak perlu refetch
+   tiap ganti filter — filter tahun/kuartal cuma menentukan tahun acuan
+   & highlight, bukan query ulang ke server). Dipakai bareng oleh chart
+   Gross Margin & EBITDA Margin. */
+async function loadMgMarginData() {
+  try {
+    const res  = await fetch(`${API_BASE}/api/tabel/margin`);
+    const data = await res.json();
+    if (data.ada_data && Array.isArray(data.rows)) {
+      MG_MARGIN_DATA = data.rows.map(r => ({
+        year:    r.year,
+        quarter: r.quarter,
+        gm: (r.gross_margin     !== null && r.gross_margin     !== undefined) ? r.gross_margin     : null,
+        em: (r.ebitda_margin    !== null && r.ebitda_margin    !== undefined) ? r.ebitda_margin    : null,
+        om: (r.operating_margin !== null && r.operating_margin !== undefined) ? r.operating_margin : null,
+        nm: (r.net_margin       !== null && r.net_margin       !== undefined) ? r.net_margin       : null,
+      }));
+    }
+  } catch (_) {
+    // Biarkan MG_MARGIN_DATA kosong → mgFindGm()/mgFindEm()/mgFindNm() otomatis fallback ke MG_MARGIN_FALLBACK
+  }
+  const y = document.getElementById('mg-yearFilter')?.value || '';
+  const q = document.getElementById('mg-quarterFilter')?.value || '';
+  renderMgGrossChart(y, q);
+  renderMgEbitdaChart(y, q);
+  renderMgAnnualChart(y, q);
+  renderMgSummaryTable(y, q);
+}
+
+/* Helper bersama: bangun grouped-bar Chart.js Target/Last Year/Actual
+   dari sebuah fungsi finder(year, quarter) → angka margin (%). Dipakai
+   oleh renderMgGrossChart & renderMgEbitdaChart supaya tidak duplikasi. */
+function mgBuildMarginChart(canvasId, tahun, kuartal, finder, yAxisLabel, accentColor) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || typeof Chart === 'undefined') return null;
+
+  const refYear    = tahun ? parseInt(tahun) : mgMaxYear();
+  const lastYear    = refYear - 1;
+  const targetYear  = refYear - 2;
+
+  const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
+  const targetVals   = QUARTERS.map(q => finder(targetYear, q));
+  const lastYearVals  = QUARTERS.map(q => finder(lastYear, q));
+  const actualVals   = QUARTERS.map(q => finder(refYear, q));
+
+  const alphaFor = q => (!kuartal || q === kuartal) ? 1 : 0.35;
+  const hexToRgba = (hex, a) => {
+    const v = hex.replace('#', '');
+    const n = parseInt(v.length === 3 ? v.split('').map(c => c + c).join('') : v, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+
+  return new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: QUARTERS,
+      datasets: [
+        {
+          label: `Target (${targetYear})`,
+          data: targetVals,
+          backgroundColor: QUARTERS.map(q => hexToRgba('#CBD5E1', alphaFor(q))),
+          borderRadius: 3
+        },
+        {
+          label: `Last Year (${lastYear})`,
+          data: lastYearVals,
+          backgroundColor: QUARTERS.map(q => hexToRgba('#94A3B8', alphaFor(q))),
+          borderRadius: 3
+        },
+        {
+          label: `Actual (${refYear})`,
+          data: actualVals,
+          backgroundColor: QUARTERS.map(q => hexToRgba(accentColor, alphaFor(q))),
+          borderRadius: 3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'start',
+          labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ctx.parsed.y === null ? `${ctx.dataset.label}: —` : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Quarter', font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: {
+          suggestedMin: 0,
+          title: { display: true, text: yAxisLabel, font: { size: 11 } },
+          ticks: { callback: (val) => `${val}` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
+let mgGrossChartInstance = null;
+
+function renderMgGrossChart(tahun, kuartal) {
+  if (mgGrossChartInstance) { mgGrossChartInstance.destroy(); mgGrossChartInstance = null; }
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#2563EB';
+  mgGrossChartInstance = mgBuildMarginChart('mg-chart-gross-canvas', tahun, kuartal, mgFindGm, 'Gross Margin', accent);
+}
+
+let mgEbitdaChartInstance = null;
+
+function renderMgEbitdaChart(tahun, kuartal) {
+  if (mgEbitdaChartInstance) { mgEbitdaChartInstance.destroy(); mgEbitdaChartInstance = null; }
+  // Warna accent EBITDA dibedakan dari Gross Margin (hijau, senada dengan
+  // ikon KPI card "EBITDA Margin" di atasnya) supaya kedua chart mudah
+  // dibedakan sekilas meski letaknya bersebelahan.
+  mgEbitdaChartInstance = mgBuildMarginChart('mg-chart-ebitda-canvas', tahun, kuartal, mgFindEm, 'EBITDA Margin', '#16A34A');
+}
+
+/* ── Chart 3: Annual Margin Trend (gantikan mg-chart-annual Metabase) ──
+   Beda dari Chart 1 & 2: bukan bandingin 1 metrik lintas 3 tahun, tapi
+   3 metrik margin (Gross/EBITDA/Net) sekaligus untuk SATU tahun acuan,
+   ditampilkan sebagai line chart per kuartal (Q1–Q4). Tahun acuan & kuartal
+   aktif mengikuti filter yang sama seperti chart lain di page ini. */
+let mgAnnualChartInstance = null;
+
+function renderMgAnnualChart(tahun, kuartal) {
+  const canvas = document.getElementById('mg-chart-annual-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (mgAnnualChartInstance) { mgAnnualChartInstance.destroy(); mgAnnualChartInstance = null; }
+
+  const refYear = tahun ? parseInt(tahun) : mgMaxYear();
+  const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+  const gmVals = QUARTERS.map(q => mgFindGm(refYear, q));
+  const emVals = QUARTERS.map(q => mgFindEm(refYear, q));
+  const nmVals = QUARTERS.map(q => mgFindNm(refYear, q));
+
+  const pointStyleFor = q => (!kuartal || q === kuartal) ? 5 : 3;
+  const pointColorFor = (q, color) => (!kuartal || q === kuartal) ? color : `${color}99`;
+
+  mgAnnualChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: QUARTERS,
+      datasets: [
+        {
+          label: `Gross Margin (${refYear})`,
+          data: gmVals,
+          borderColor: '#2563EB',
+          backgroundColor: '#2563EB',
+          pointBackgroundColor: QUARTERS.map(q => pointColorFor(q, '#2563EB')),
+          pointRadius: QUARTERS.map(pointStyleFor),
+          tension: 0.3,
+          spanGaps: true
+        },
+        {
+          label: `EBITDA Margin (${refYear})`,
+          data: emVals,
+          borderColor: '#F59E0B',
+          backgroundColor: '#F59E0B',
+          pointBackgroundColor: QUARTERS.map(q => pointColorFor(q, '#F59E0B')),
+          pointRadius: QUARTERS.map(pointStyleFor),
+          tension: 0.3,
+          spanGaps: true
+        },
+        {
+          label: `Net Margin (${refYear})`,
+          data: nmVals,
+          borderColor: '#16A34A',
+          backgroundColor: '#16A34A',
+          pointBackgroundColor: QUARTERS.map(q => pointColorFor(q, '#16A34A')),
+          pointRadius: QUARTERS.map(pointStyleFor),
+          tension: 0.3,
+          spanGaps: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'start',
+          labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ctx.parsed.y === null ? `${ctx.dataset.label}: —` : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Quarter', font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: {
+          suggestedMin: 0,
+          title: { display: true, text: 'Margin (%)', font: { size: 11 } },
+          ticks: { callback: (val) => `${val}` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── Table: Margin Summary (YoY) (gantikan mg-chart-table Metabase) ──
+   Pakai sumber data yang sama dengan chart Gross/EBITDA/Annual Trend
+   (MG_MARGIN_DATA) supaya tidak ada fetch ganda / angka yang tidak sinkron.
+   Histori penuh selalu jadi basis; filter tahun/kuartal mempersempit baris
+   yang ditampilkan (mirip Financial Summary Table di page Cash Flow). */
+function renderMgSummaryTable(tahun, kuartal) {
+  const tbody    = document.getElementById('mg-summary-tbody');
+  const rowcount = document.getElementById('mg-table-rowcount');
+  if (!tbody) return;
+
+  const src = MG_MARGIN_DATA.length ? MG_MARGIN_DATA : MG_MARGIN_FALLBACK;
+  const y = tahun ? parseInt(tahun) : null;
+
+  const rows = src
+    .filter(d => (!y ? true : d.year === y) && (!kuartal ? true : d.quarter === kuartal))
+    .slice()
+    .sort((a, b) => a.year - b.year || KEU_QUARTER_ORDER[a.quarter] - KEU_QUARTER_ORDER[b.quarter]);
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="keu-table-loading">Tidak ada data</td></tr>';
+    if (rowcount) rowcount.textContent = '0 rows';
+    return;
+  }
+
+  const fmtPct = v => (v === null || v === undefined) ? '—' : `${v.toFixed(2)}%`;
+
+  tbody.innerHTML = rows.map(d => `
+    <tr>
+      <td>${d.year}</td>
+      <td>${d.quarter}</td>
+      <td class="num">${fmtPct(d.gm)}</td>
+      <td class="num">${fmtPct(d.em)}</td>
+      <td class="num">${fmtPct(d.om)}</td>
+      <td class="num">${fmtPct(d.nm)}</td>
+    </tr>`).join('');
+
+  if (rowcount) rowcount.textContent = `${rows.length} rows`;
+}
 
 /* ══════════════════════════════════════════
    KPI DINAMIS — RESOURCE OVERVIEW (ops)
@@ -807,6 +1633,113 @@ if (_pcqQGroup) {
   });
 }
 
+/* ── Table: Laba vs Kas per Tahun (gantikan pcq-chart-table-laba Metabase) ──
+   Pakai dataset tahunan yang sama dengan scatter plot (window.PCQ_ANNUAL_DATA)
+   supaya tabel & scatter selalu konsisten — tidak ada sumber data ganda.
+   Data ini annual, jadi filter yang berlaku cuma tahun (bukan kuartal). */
+function renderPcqLabaTable(tahun) {
+  const tbody = document.getElementById('pcq-laba-tbody');
+  if (!tbody) return;
+
+  const all = window.PCQ_ANNUAL_DATA || [];
+  const y = tahun ? parseInt(tahun) : null;
+  const rows = (y ? all.filter(d => d.year === y) : all.slice())
+    .sort((a, b) => b.year - a.year);
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="keu-table-loading">Tidak ada data</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(d => `
+    <tr>
+      <td>${d.year}</td>
+      <td class="num">${d.ni.toFixed(2)} T</td>
+      <td class="num">${d.cfo.toFixed(2)} T</td>
+      <td class="num">${d.eqr.toFixed(2)}×</td>
+    </tr>`).join('');
+}
+
+/* ── Trend Cash Flow to Earnings Ratio (gantikan pcq-chart-eqr-trend Metabase) ──
+   Line chart EQR per tahun, pakai dataset tahunan yang sama dengan scatter plot
+   & tabel (window.PCQ_ANNUAL_DATA) supaya ketiganya selalu konsisten.
+   Saat filter tahun aktif, titik tahun tsb diperbesar & di-highlight — sisa
+   titik tetap tampil sebagai konteks tren (annual, jadi filter kuartal
+   tidak berlaku di sini). */
+let pcqEqrTrendChartInstance = null;
+
+function renderPcqEqrTrendChart(tahun) {
+  const canvas = document.getElementById('pcq-eqr-trend-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (pcqEqrTrendChartInstance) { pcqEqrTrendChartInstance.destroy(); pcqEqrTrendChartInstance = null; }
+
+  const all = window.PCQ_ANNUAL_DATA || [];
+  if (!all.length) return;
+
+  const sorted = all.slice().sort((a, b) => a.year - b.year);
+  const activeYear = tahun ? parseInt(tahun) : null;
+
+  const labels = sorted.map(d => String(d.year));
+  const values = sorted.map(d => Number(d.eqr.toFixed(2)));
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent2').trim() || '#2563EB';
+
+  const pointRadius      = sorted.map(d => (activeYear && d.year === activeYear) ? 8 : 4);
+  const pointHoverRadius = pointRadius.map(r => r + 2);
+  const pointBg          = sorted.map(d => (activeYear && d.year === activeYear) ? accent : '#fff');
+  const pointBorderW     = sorted.map(d => (activeYear && d.year === activeYear) ? 3 : 2);
+
+  const maxVal = Math.max(...values);
+  const suggestedMin = 0;
+  const suggestedMax = Math.ceil((maxVal + 0.3) * 10) / 10;
+
+  pcqEqrTrendChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'EQR',
+        data: values,
+        borderColor: accent,
+        backgroundColor: 'rgba(37,99,235,0.08)',
+        borderWidth: 2.5,
+        pointRadius,
+        pointHoverRadius,
+        pointBackgroundColor: pointBg,
+        pointBorderColor: accent,
+        pointBorderWidth: pointBorderW,
+        tension: 0.35,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `EQR: ${ctx.parsed.y.toFixed(2)}×` } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: {
+          suggestedMin,
+          suggestedMax,
+          title: { display: true, text: 'EQR', font: { size: 11 } },
+          ticks: { callback: (val) => Number(val).toFixed(2) },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
 /* ══════════════════════════════════════════
    SCATTER PLOT INTERAKTIF — Net Income vs CFO
    Features: tooltip hover, highlight click,
@@ -827,6 +1760,9 @@ if (_pcqQGroup) {
     {year:2024,ni:2.008,cfo:3.348,eqr:1.67},
     {year:2025,ni:2.249,cfo:3.808,eqr:1.69}
   ];
+  // Dibagikan ke luar IIFE supaya renderPcqLabaTable (Table: Laba vs Kas per Tahun)
+  // pakai sumber data yang sama persis, tidak duplikat angka.
+  window.PCQ_ANNUAL_DATA = ALL_SDATA;
 
   // Filter state
   let filterYear    = null;  // null = All Years
@@ -1499,26 +2435,492 @@ async function updateKpiBalance() {
   }
 }
 
-/* ── Balance Sheet Chart Frames — URL base masing-masing chart ── */
-const BS_BASES = {
-  'bs-chart1': 'http://localhost:3000/public/question/048f79e4-333a-447b-83f5-78b8dc754994?titled=false',
-  'bs-chart2': 'http://localhost:3000/public/question/ff0ec1c3-0531-4e50-a0bd-960f30e27166?titled=false',
-  'bs-chart3': 'http://localhost:3000/public/question/0a87c31d-3dc1-44dd-924c-116d3ab7522c?titled=false',
-  'bs-chart4': 'http://localhost:3000/public/question/ee26e79e-3302-44fb-b453-4210f11687ff?titled=false',
-};
+/* ── Balance Sheet — seluruh 4 chart (bs-chart1 Total Assets Composition,
+   bs-chart2 Equity Composition, bs-chart3 Cash & Cash Equivalents Trend,
+   bs-chart4 Balance Sheet Summary) sudah jadi Chart.js native, fetch dari
+   /api/tabel/balance lewat loadBsBalanceData, bukan iframe Metabase lagi —
+   jadi tidak ada lagi BS_BASES/iframe src-swap di sini. */
 
 function updateBalanceCharts() {
-  const params = new URLSearchParams();
   const y = document.getElementById('bs-yearFilter')?.value;
   const q = document.getElementById('bs-quarterFilter')?.value;
-  if (y) params.set('Year',    y);
-  if (q) params.set('Quarter', q);
-  const qs = params.toString();
 
-  Object.entries(BS_BASES).forEach(([id, base]) => {
-    const el = document.getElementById(id);
-    if (el) el.src = qs ? `${base}&${qs}` : base;
+  renderBsAssetsChart(y, q);
+  renderBsEquityChart(y, q);
+  renderBsCashChart(y, q);
+  renderBsSummaryChart(y, q);
+}
+
+/* ── Chart: Total Assets Composition (gantikan bs-chart1 Metabase) ──
+   Grouped bar per kuartal (Cash/Receivable/Inventory/Other Assets) untuk
+   1 tahun acuan — pola sama dengan chart Margin Trends: tahun acuan dari
+   filter, atau tahun terbaru yang ada datanya kalau "All Years". Data
+   histori penuh di-fetch sekali (BS_BALANCE_DATA), filter tahun/kuartal
+   cuma menentukan tahun acuan & highlight kuartal aktif, bukan fetch ulang. */
+let BS_BALANCE_DATA = [];
+
+async function loadBsBalanceData() {
+  try {
+    const res  = await fetch(`${API_BASE}/api/tabel/balance`);
+    const data = await res.json();
+    if (data.ada_data && Array.isArray(data.rows)) {
+      BS_BALANCE_DATA = data.rows.map(r => ({
+        year:    r.year,
+        quarter: r.quarter,
+        cash:   r.cash_raw               / 1_000_000, // juta → Triliun
+        ar:     r.accounts_receivable_raw / 1_000_000,
+        inv:    r.inventory_raw          / 1_000_000,
+        other:  r.other_assets_raw       / 1_000_000,
+        equity: r.total_equity_raw       / 1_000_000,
+        assets: r.total_assets_raw       / 1_000_000,
+        liab:   r.total_liabilities_raw  / 1_000_000,
+      }));
+    }
+  } catch (_) {
+    // Biarkan BS_BALANCE_DATA kosong → chart dibiarkan kosong kalau fetch gagal
+  }
+  const y = document.getElementById('bs-yearFilter')?.value || '';
+  const q = document.getElementById('bs-quarterFilter')?.value || '';
+  renderBsAssetsChart(y, q);
+  renderBsEquityChart(y, q);
+  renderBsCashChart(y, q);
+  renderBsSummaryChart(y, q);
+}
+
+function bsMaxYear() {
+  return BS_BALANCE_DATA.length ? Math.max(...BS_BALANCE_DATA.map(d => d.year)) : new Date().getFullYear();
+}
+
+function bsFindRow(year, quarter) {
+  return BS_BALANCE_DATA.find(d => d.year === year && d.quarter === quarter) || null;
+}
+
+let bsAssetsChartInstance = null;
+
+function renderBsAssetsChart(tahun, kuartal) {
+  const canvas = document.getElementById('bs-chart1-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (bsAssetsChartInstance) { bsAssetsChartInstance.destroy(); bsAssetsChartInstance = null; }
+  if (!BS_BALANCE_DATA.length) return;
+
+  const refYear = tahun ? parseInt(tahun) : bsMaxYear();
+  const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+  const cashVals  = QUARTERS.map(q => bsFindRow(refYear, q)?.cash  ?? null);
+  const arVals    = QUARTERS.map(q => bsFindRow(refYear, q)?.ar    ?? null);
+  const invVals   = QUARTERS.map(q => bsFindRow(refYear, q)?.inv   ?? null);
+  const otherVals = QUARTERS.map(q => bsFindRow(refYear, q)?.other ?? null);
+
+  const alphaFor = q => (!kuartal || q === kuartal) ? 1 : 0.4;
+  const hexToRgba = (hex, a) => {
+    const v = hex.replace('#', '');
+    const n = parseInt(v.length === 3 ? v.split('').map(c => c + c).join('') : v, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+
+  bsAssetsChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: QUARTERS,
+      datasets: [
+        {
+          label: 'Cash',
+          data: cashVals,
+          backgroundColor: QUARTERS.map(q => hexToRgba('#2563EB', alphaFor(q))),
+          borderRadius: 3
+        },
+        {
+          label: 'Receivable',
+          data: arVals,
+          backgroundColor: QUARTERS.map(q => hexToRgba('#F59E0B', alphaFor(q))),
+          borderRadius: 3
+        },
+        {
+          label: 'Inventory',
+          data: invVals,
+          backgroundColor: QUARTERS.map(q => hexToRgba('#16A34A', alphaFor(q))),
+          borderRadius: 3
+        },
+        {
+          label: 'Other Assets',
+          data: otherVals,
+          backgroundColor: QUARTERS.map(q => hexToRgba('#7C3AED', alphaFor(q))),
+          borderRadius: 3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'start',
+          labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ctx.parsed.y === null ? `${ctx.dataset.label}: —` : `${ctx.dataset.label}: Rp${ctx.parsed.y.toFixed(2)}T`
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: {
+          suggestedMin: 0,
+          title: { display: true, text: 'Amount (Rp Trillion)', font: { size: 11 } },
+          ticks: { callback: (val) => `Rp${val}T` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
   });
+}
+
+/* ── Chart: Equity Composition (gantikan bs-chart2 Metabase) ──
+   Default ("All Years"): area/line chart HISTORI PENUH (semua tahun,
+   2 series Equity & Cash) — pola sama seperti "Trend Cash Flow to
+   Earnings Ratio" di page Cash Flow Health. Saat filter tahun tertentu
+   dipilih, chart di-scope HANYA ke 4 kuartal tahun itu (bukan histori
+   penuh lagi), dan saat kuartal spesifik juga dipilih, titik kuartal
+   tsb diperbesar/di-highlight. */
+let bsEquityChartInstance = null;
+
+function renderBsEquityChart(tahun, kuartal) {
+  const canvas = document.getElementById('bs-chart2-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (bsEquityChartInstance) { bsEquityChartInstance.destroy(); bsEquityChartInstance = null; }
+  if (!BS_BALANCE_DATA.length) return;
+
+  const activeYear = tahun ? parseInt(tahun) : null;
+
+  let sorted = BS_BALANCE_DATA.slice().sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return KEU_QUARTER_ORDER[a.quarter] - KEU_QUARTER_ORDER[b.quarter];
+  });
+
+  // Scope ke 1 tahun (4 titik kuartal) kalau filter tahun aktif
+  if (activeYear) sorted = sorted.filter(d => d.year === activeYear);
+
+  const isActive = d => !kuartal || d.quarter === kuartal;
+  const labelFor = d => activeYear ? d.quarter : `${d.year} ${d.quarter}`;
+
+  const labels      = sorted.map(labelFor);
+  const equityVals  = sorted.map(d => Number(d.equity.toFixed(2)));
+  const cashVals    = sorted.map(d => Number(d.cash.toFixed(2)));
+
+  const equityColor = '#2563EB';
+  const cashColor    = '#16A34A';
+
+  const pointRadiusFor = d => isActive(d) ? 6 : 2.5;
+
+  bsEquityChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Equity',
+          data: equityVals,
+          borderColor: equityColor,
+          backgroundColor: 'rgba(37,99,235,0.15)',
+          borderWidth: 2,
+          pointRadius: sorted.map(pointRadiusFor),
+          pointBackgroundColor: equityColor,
+          tension: 0.35,
+          fill: true
+        },
+        {
+          label: 'Cash',
+          data: cashVals,
+          borderColor: cashColor,
+          backgroundColor: 'rgba(22,163,74,0.25)',
+          borderWidth: 2,
+          pointRadius: sorted.map(pointRadiusFor),
+          pointBackgroundColor: cashColor,
+          tension: 0.35,
+          fill: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'start',
+          labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } }
+        },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: Rp${ctx.parsed.y.toFixed(2)}T` } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false },
+          ticks: { maxTicksLimit: 10 }
+        },
+        y: {
+          suggestedMin: 0,
+          title: { display: true, text: 'Amount (Rp Trillion)', font: { size: 11 } },
+          ticks: { callback: (val) => `Rp${val}T` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── Chart: Cash & Cash Equivalents Trend (gantikan bs-chart3 Metabase) ──
+   Default ("All Years"): line/area HISTORI PENUH (semua tahun) — pola
+   sama dengan Equity Composition (bs-chart2). Saat filter tahun tertentu
+   dipilih, chart di-scope HANYA ke 4 kuartal tahun itu, dan saat kuartal
+   spesifik juga dipilih, titik kuartal tsb diperbesar/di-highlight.
+   Tooltip growth QoQ (%) tetap dihitung berdasarkan urutan titik yang
+   sedang ditampilkan (histori penuh atau 4 kuartal 1 tahun). */
+let bsCashChartInstance = null;
+
+function renderBsCashChart(tahun, kuartal) {
+  const canvas = document.getElementById('bs-chart3-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (bsCashChartInstance) { bsCashChartInstance.destroy(); bsCashChartInstance = null; }
+  if (!BS_BALANCE_DATA.length) return;
+
+  const activeYear = tahun ? parseInt(tahun) : null;
+
+  let sorted = BS_BALANCE_DATA.slice().sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return KEU_QUARTER_ORDER[a.quarter] - KEU_QUARTER_ORDER[b.quarter];
+  });
+
+  // Scope ke 1 tahun (4 titik kuartal) kalau filter tahun aktif
+  if (activeYear) sorted = sorted.filter(d => d.year === activeYear);
+
+  const isActive = d => !kuartal || d.quarter === kuartal;
+  const labelFor = d => activeYear ? d.quarter : `${d.year} ${d.quarter}`;
+
+  const labels   = sorted.map(labelFor);
+  const cashVals = sorted.map(d => Number(d.cash.toFixed(2)));
+
+  // Growth QoQ (%) vs periode sebelumnya, untuk ditampilkan di tooltip
+  const growthVals = cashVals.map((v, i) => {
+    if (i === 0 || cashVals[i - 1] === null || cashVals[i - 1] === 0) return null;
+    return ((v - cashVals[i - 1]) / Math.abs(cashVals[i - 1])) * 100;
+  });
+
+  const cashColor = '#EF4444';
+  const pointRadiusFor = d => isActive(d) ? 6 : 2.5;
+
+  bsCashChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Cash & Cash Equivalents',
+          data: cashVals,
+          borderColor: cashColor,
+          backgroundColor: 'rgba(239,68,68,0.15)',
+          borderWidth: 2,
+          pointRadius: sorted.map(pointRadiusFor),
+          pointBackgroundColor: cashColor,
+          tension: 0.35,
+          fill: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `Cash: Rp${ctx.parsed.y.toFixed(2)}T`,
+            afterLabel: (ctx) => {
+              const g = growthVals[ctx.dataIndex];
+              if (g === null || g === undefined) return '';
+              const naik = g >= 0;
+              return `${naik ? '↑' : '↓'} ${Math.abs(g).toFixed(1)}% vs previous quarter`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false },
+          ticks: { maxTicksLimit: 10 }
+        },
+        y: {
+          suggestedMin: 0,
+          title: { display: true, text: 'Total Cash (Rp)', font: { size: 11 } },
+          ticks: { callback: (val) => `Rp${val}T` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── Chart: Balance Sheet Summary (gantikan bs-chart4 Metabase) ──
+   Donut Equity vs Liabilities dari Total Assets pada 1 periode acuan
+   (bukan sum seluruh histori seperti versi Metabase lama — angka sum
+   lintas puluhan kuartal kurang bermakna untuk dibaca). Periode acuan:
+   - tahun & kuartal dipilih   → kuartal itu persis
+   - tahun saja dipilih        → kuartal terakhir yang ada datanya di
+                                  tahun itu (Q4 → Q1)
+   - tidak ada filter (All Years) → kuartal terakhir yang ada datanya
+                                  secara keseluruhan
+   Total Assets & label periode ditampilkan di tengah donut lewat plugin
+   Chart.js custom (centerText), meniru tampilan Metabase aslinya. */
+function bsRefRow(tahun, kuartal) {
+  if (!BS_BALANCE_DATA.length) return null;
+  const QORDER = ['Q4', 'Q3', 'Q2', 'Q1'];
+
+  if (tahun && kuartal) {
+    return bsFindRow(parseInt(tahun), kuartal) || null;
+  }
+  if (tahun) {
+    const y = parseInt(tahun);
+    for (const q of QORDER) {
+      const row = bsFindRow(y, q);
+      if (row) return row;
+    }
+    return null;
+  }
+  // Tidak ada filter tahun → tahun terbaru, kuartal terakhir yang ada datanya
+  const y = bsMaxYear();
+  for (const q of QORDER) {
+    const row = bsFindRow(y, q);
+    if (row) return row;
+  }
+  return null;
+}
+
+const bsSummaryCenterText = {
+  id: 'bsSummaryCenterText',
+  afterDraw(chart) {
+    if (chart.config.type !== 'doughnut' || chart.canvas.id !== 'bs-chart4-canvas') return;
+    const { ctx, chartArea: { left, right, top, bottom } } = chart;
+    const cx = (left + right) / 2;
+    const cy = (top + bottom) / 2;
+    const meta = chart.$bsCenterText;
+    if (!meta) return;
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.font = '700 20px sans-serif';
+    ctx.fillStyle = '#0F172A';
+    ctx.fillText(meta.total, cx, cy - 10);
+
+    ctx.font = '500 11.5px sans-serif';
+    ctx.fillStyle = '#64748B';
+    ctx.fillText(meta.period, cx, cy + 12);
+
+    ctx.restore();
+  }
+};
+if (typeof Chart !== 'undefined') Chart.register(bsSummaryCenterText);
+
+let bsSummaryChartInstance = null;
+
+function renderBsSummaryChart(tahun, kuartal) {
+  const canvas = document.getElementById('bs-chart4-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (bsSummaryChartInstance) { bsSummaryChartInstance.destroy(); bsSummaryChartInstance = null; }
+  if (!BS_BALANCE_DATA.length) return;
+
+  const row = bsRefRow(tahun, kuartal);
+  if (!row) return;
+
+  const equity = Math.max(row.equity, 0);
+  const liab   = Math.max(row.liab, 0);
+  const total  = equity + liab;
+  if (total <= 0) return;
+
+  const equityPct = (equity / total) * 100;
+  const liabPct   = (liab   / total) * 100;
+
+  const equityColor = '#16A34A';
+  const liabColor    = '#EF4444';
+
+  const periodLabel = `${row.quarter} ${row.year}`;
+  const totalLabel  = `Rp${total.toFixed(2)}T`;
+
+  bsSummaryChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Equity', 'Liabilities'],
+      datasets: [
+        {
+          data: [equity, liab],
+          backgroundColor: [equityColor, liabColor],
+          borderColor: '#fff',
+          borderWidth: 2,
+          hoverOffset: 4
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '68%',
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 },
+            generateLabels: (chart) => {
+              const pcts = [equityPct, liabPct];
+              return chart.data.labels.map((label, i) => ({
+                text: `${label} ${pcts[i].toFixed(1)}%`,
+                fillStyle: chart.data.datasets[0].backgroundColor[i],
+                strokeStyle: chart.data.datasets[0].backgroundColor[i],
+                pointStyle: 'circle',
+                index: i
+              }));
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const pct = ctx.dataIndex === 0 ? equityPct : liabPct;
+              return `${ctx.label}: Rp${ctx.parsed.toFixed(2)}T (${pct.toFixed(1)}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  bsSummaryChartInstance.$bsCenterText = { total: totalLabel, period: periodLabel };
+  bsSummaryChartInstance.update();
 }
 
 // Hook filter Balance Sheet ke KPI + chart frames
@@ -1533,6 +2935,10 @@ initQuarterBtns('bs-quarterBtns', 'bs-quarterFilter', () => {
   updateKpiBalance();
   updateBalanceCharts();
 });
+
+// Fetch data historis Balance Sheet sekali saat aplikasi dibuka (dipakai
+// bareng oleh chart Total Assets Composition & chart lain di page ini nanti)
+loadBsBalanceData();
 
 /* ── 8. SIDEBAR TOGGLE ── */
 (function () {
@@ -1825,18 +3231,22 @@ if (notifBtn && notifPanel) {
     /* 2. Metabase iframes — blank + re-assign lebih andal dari hanya ?_t=
        Memaksa Metabase render ulang query dari DB, bukan dari cache browser. */
     [
-      /* Financial Overview */
-      'keu-chart1', 'keu-chart2',
+      /* Financial Overview — keu-chart1 sekarang Chart.js (di-refresh lewat renderKeuTable) */
+      'keu-chart2',
       /* Resource Overview */
       'ops-chart1', 'ops-chart2', 'ops-chart3', 'ops-chart4',
       /* Cash Flow Health */
       'pcq-chart1',
-      /* Margin Trends */
-      'mg-chart-gross', 'mg-chart-ebitda', 'mg-chart-annual', 'mg-chart-table',
-      /* Balance Sheet */
-      'bs-chart1', 'bs-chart2', 'bs-chart3', 'bs-chart4',
-      /* Key Financial Indicators — FIX: sebelumnya ada di daftar tapi perlu dipastikan */
-      'kfi-chart1', 'kfi-chart2',
+      /* Margin Trends — seluruh 4 chart/tabel (mg-chart-gross, mg-chart-ebitda,
+         mg-chart-annual, mg-chart-table) sekarang Chart.js/HTML native, fetch
+         dari /api/tabel/margin lewat loadMgMarginData, bukan iframe lagi —
+         jadi tidak ada lagi entry Margin Trends di daftar iframe ini. */
+      /* Balance Sheet — seluruh 4 chart (bs-chart1, bs-chart2, bs-chart3,
+         bs-chart4) sekarang Chart.js native, jadi tidak ada lagi entry
+         Balance Sheet di daftar iframe ini. */
+      /* Key Financial Indicators — seluruh chart (kfi-chart-dividen &
+         kfi-chart-returns) sekarang Chart.js native, jadi tidak ada lagi
+         entry Key Financial Indicators di daftar iframe ini. */
     ].forEach(id => {
       const iframe = document.getElementById(id);
       if (!iframe) return;
@@ -1867,6 +3277,13 @@ if (notifBtn && notifPanel) {
       const q = document.getElementById('keu-quarterFilter')?.value || '';
       renderKeuTable(y, q);
     }
+    /* Refresh Margin Trends (chart Gross/EBITDA/Annual Trend & tabel Summary) —
+       fetch ulang /api/tabel/margin supaya data baru langsung kelihatan tanpa
+       perlu reload halaman. */
+    if (typeof loadMgMarginData === 'function') loadMgMarginData();
+    /* Refresh Balance Sheet Trends (chart Total Assets Composition) —
+       fetch ulang /api/tabel/balance. */
+    if (typeof loadBsBalanceData === 'function') loadBsBalanceData();
 
     /* 4. Populate ulang dropdown tahun jika ada data tahun baru */
     if (typeof populateTahunFilter === 'function') populateTahunFilter();
@@ -1969,7 +3386,8 @@ if (notifBtn && notifPanel) {
       }
 
       if (res.ok) {
-        tampilStatus('✓ ' + (json.pesan || json.message || 'Data berhasil disimpan.'), 'success');
+        const isPending = json.status === 'pending';
+        tampilStatus((isPending ? '⏳ ' : '✓ ') + (json.pesan || json.message || 'Data berhasil disimpan.'), 'success');
 
         try {
           if (typeof window.refreshDashboard === 'function') window.refreshDashboard();
@@ -2309,16 +3727,17 @@ window.openHapusDataModal = function() { openAdminPage('hapus'); };
     const fieldLabel = getFieldLabel();
 
     const konfirmasi = confirm(
-      `⚠️ KONFIRMASI HAPUS\n\n` +
+      `⚠️ KONFIRMASI PENGAJUAN HAPUS\n\n` +
       `• Jenis Data : ${fieldLabel}\n` +
       `• Tahun      : ${tahun   || 'Semua tahun'}\n` +
       `• Kuartal    : ${kuartal || 'Semua kuartal'}\n\n` +
-      `Nilai field akan di-set ke NULL.\nTindakan ini TIDAK DAPAT DIBATALKAN.\nLanjutkan?`
+      `Pengajuan ini akan dikirim ke Manajemen untuk disetujui.\n` +
+      `Nilai field baru akan di-set ke NULL SETELAH disetujui.\nLanjutkan?`
     );
     if (!konfirmasi) return;
 
     btnHapus.disabled = true;
-    btnHapus.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Menghapus...`;
+    btnHapus.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Mengajukan...`;
     resetHapusStatus();
 
     const params = new URLSearchParams({ field });
@@ -2331,8 +3750,9 @@ window.openHapusDataModal = function() { openAdminPage('hapus'); };
       const json = await res.json().catch(() => ({}));
 
       if (res.ok) {
+        const isPending = json.status === 'pending';
         if (statusEl) {
-          statusEl.textContent = '✓ ' + (json.pesan || json.message || `"${fieldLabel}" berhasil dihapus.`);
+          statusEl.textContent = (isPending ? '⏳ ' : '✓ ') + (json.pesan || json.message || `"${fieldLabel}" berhasil dihapus.`);
           statusEl.className = 'modal-status del-modal-status admin-hapus-status success';
         }
         resetDelForm();
@@ -2352,7 +3772,7 @@ window.openHapusDataModal = function() { openAdminPage('hapus'); };
     } finally {
       btnHapus.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
         <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-        <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> Hapus Data Ini`;
+        <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> Ajukan Hapus Data Ini`;
       updateDelSummary();
     }
   });
@@ -2379,17 +3799,43 @@ async function pollNotifikasi() {
       notifList.innerHTML = data.notifikasi.map(n => {
         const waktu = formatWaktu(n.dibuat_pada);
         const unread = n.sudah_dibaca === 0 ? ' unread' : '';
-        const icon = n.tipe === 'success' ? '✓' : n.tipe === 'warning' ? '⚠' : 'ℹ';
+        const icon = n.tipe === 'success' ? '✓' : n.tipe === 'warning' ? '⚠' : n.tipe === 'approval' ? '📝' : 'ℹ';
         const scopeTag = n.user_id ? '' : '<span style="font-size:10px;opacity:.6;margin-left:4px;">[global]</span>';
+
+        // Tombol Setujui/Tolak hanya muncul untuk Manajemen pada notifikasi
+        // pengajuan yang masih menunggu keputusan (tipe 'approval').
+        const bisaMemutuskan = n.tipe === 'approval' && n.pending_id && currentRole === 'manajemen';
+        const approvalTag = n.tipe === 'approval' ? '<span class="notif-approval-tag">Menunggu Persetujuan</span>' : '';
+        const tombolAksi = bisaMemutuskan ? `
+            <div class="notif-approval-actions">
+              <button type="button" class="notif-btn-approve" data-pending-id="${n.pending_id}">✓ Setujui</button>
+              <button type="button" class="notif-btn-reject" data-pending-id="${n.pending_id}">✗ Tolak</button>
+            </div>` : '';
+
         return `
-          <div class="notif-item${unread}">
+          <div class="notif-item${unread}${bisaMemutuskan ? ' notif-approval' : ''}">
             <div class="notif-dot"></div>
             <div class="notif-content">
-              <p>${icon} ${n.pesan}${scopeTag}</p>
+              <p>${icon} ${n.pesan}${scopeTag}${approvalTag}</p>
               <span>${waktu}</span>
+              ${tombolAksi}
             </div>
           </div>`;
       }).join('');
+
+      // Hubungkan tombol Setujui / Tolak yang baru dirender
+      notifList.querySelectorAll('.notif-btn-approve').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          prosesPengajuanPending(btn.dataset.pendingId, 'approve', btn);
+        });
+      });
+      notifList.querySelectorAll('.notif-btn-reject').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          prosesPengajuanPending(btn.dataset.pendingId, 'reject', btn);
+        });
+      });
     }
 
     // Update badge
@@ -2406,6 +3852,48 @@ async function pollNotifikasi() {
     // Server belum aktif — diam saja, tidak error di console
   }
 }
+
+/* ── APPROVE / TOLAK PENGAJUAN (khusus Manajemen, dari notification bar) ── */
+async function prosesPengajuanPending(pendingId, aksi, btnEl) {
+  if (!pendingId || !aksi) return;
+
+  let alasan = '';
+  if (aksi === 'reject') {
+    alasan = window.prompt('Alasan penolakan (opsional, boleh dikosongkan):') || '';
+  } else {
+    const konfirmasi = confirm('Setujui pengajuan ini?\n\nData akan langsung dipublikasikan ke dashboard setelah disetujui.');
+    if (!konfirmasi) return;
+  }
+
+  // Nonaktifkan sementara kedua tombol di item notifikasi ini supaya tidak diklik dobel
+  const wrapEl = btnEl ? btnEl.closest('.notif-approval-actions') : null;
+  if (wrapEl) {
+    wrapEl.querySelectorAll('button').forEach(b => { b.disabled = true; });
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/pending/${pendingId}/${aksi}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: aksi === 'reject' ? JSON.stringify({ alasan }) : JSON.stringify({}),
+    });
+    const json = await res.json().catch(() => ({}));
+
+    if (res.ok) {
+      await pollNotifikasi();
+      if (typeof window.refreshDashboard === 'function') window.refreshDashboard();
+    } else {
+      alert('✗ ' + (json.message || json.error || 'Gagal memproses pengajuan. Mungkin sudah diproses sebelumnya.'));
+      await pollNotifikasi(); // Refresh supaya status terbaru tampil (mis. sudah diproses org lain)
+    }
+  } catch (_) {
+    alert('✗ Tidak dapat terhubung ke server. Pastikan Flask (app.py) berjalan.');
+    if (wrapEl) {
+      wrapEl.querySelectorAll('button').forEach(b => { b.disabled = false; });
+    }
+  }
+}
+window.prosesPengajuanPending = prosesPengajuanPending;
 
 // Format waktu relatif
 function formatWaktu(isoStr) {
@@ -2599,9 +4087,14 @@ if (_keuQGroup) {
   updateKPI();
   renderKeuTable('', '');  // Tabel ringkasan keuangan
   updateKpiOps();
+  loadOpsCompositionChart('', '');  // Composition + OCF Trend + Inflow vs Outflow (Resource Overview)
+  renderOpsDetailTable('', '');     // Quarterly Cash Flow Details table (Resource Overview)
   updateKpiPCQ();
+  renderPcqLabaTable('');      // Table: Laba vs Kas per Tahun (Cash Flow Health)
+  renderPcqEqrTrendChart(''); // Trend Cash Flow to Earnings Ratio (Cash Flow Health)
   updateKpiBalance();
   updateKpiMargin();
+  loadMgMarginData();  // Fetch data + render Gross Margin & EBITDA Margin Performance (Margin Analysis Dashboard)
   updateBalanceCharts();
 })();
 /* ── KFI FILTER HOOKS ── */
@@ -2732,11 +4225,217 @@ function renderKfiKpiCard(item, data) {
   }
 }
 
-/* ── URL base Metabase untuk chart KFI ── */
-const KFI_CHARTS = {
-  "kfi-chart-dividen": "http://localhost:3000/public/question/a71cbf60-cfe4-4a8d-ab98-953197c4dccf?titled=false",
-  "kfi-chart-returns": "http://localhost:3000/public/question/61a66e12-6222-4004-b731-f812c1192521?titled=false",
-};
+/* ── Page Key Financial Indicators — seluruh chart (Trend Working Capital
+   Ratio & Tren ROA/ROE/ROCE) sudah jadi Chart.js native, fetch dari
+   /api/tabel/kfi lewat loadKfiSeriesData, bukan iframe Metabase lagi —
+   jadi tidak ada lagi KFI_CHARTS/iframe src-swap di sini. */
+
+/* ── Chart: Trend Working Capital Ratio (gantikan kfi-chart-dividen
+   Metabase) ── Line chart HISTORI PENUH (semua tahun) — pola sama
+   dengan chart Equity Composition & Cash Trend di page Balance Sheet:
+   filter "All Years" → tampil histori penuh; filter tahun tertentu →
+   chart di-scope hanya ke 4 kuartal tahun itu; filter kuartal spesifik
+   → titik kuartal itu diperbesar/di-highlight. */
+let KFI_SERIES_DATA = [];
+
+async function loadKfiSeriesData() {
+  try {
+    const res  = await fetch(`${API_BASE}/api/tabel/kfi`);
+    const data = await res.json();
+    if (data.ada_data && Array.isArray(data.rows)) {
+      KFI_SERIES_DATA = data.rows.map(r => ({
+        year:    r.year,
+        quarter: r.quarter,
+        wc:      r.working_capital_ratio,
+        roa:     r.roa_pct,
+        roe:     r.roe_pct,
+        roce:    r.roce_pct,
+      }));
+    }
+  } catch (_) {
+    // Biarkan KFI_SERIES_DATA kosong → chart dibiarkan kosong kalau fetch gagal
+  }
+  const y = document.getElementById('kfi-yearFilter')?.value || '';
+  const q = document.getElementById('kfi-quarterFilter')?.value || '';
+  renderKfiWcChart(y, q);
+  renderKfiReturnsChart(y, q);
+}
+
+let kfiWcChartInstance = null;
+
+function renderKfiWcChart(tahun, kuartal) {
+  const canvas = document.getElementById('kfi-chart-wc-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (kfiWcChartInstance) { kfiWcChartInstance.destroy(); kfiWcChartInstance = null; }
+  if (!KFI_SERIES_DATA.length) return;
+
+  const activeYear = tahun ? parseInt(tahun) : null;
+
+  let sorted = KFI_SERIES_DATA.slice().sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return KEU_QUARTER_ORDER[a.quarter] - KEU_QUARTER_ORDER[b.quarter];
+  });
+
+  // Scope ke 1 tahun (4 titik kuartal) kalau filter tahun aktif
+  if (activeYear) sorted = sorted.filter(d => d.year === activeYear);
+
+  const isActive = d => !kuartal || d.quarter === kuartal;
+  const labelFor = d => activeYear ? d.quarter : `${d.year} ${d.quarter}`;
+
+  const labels = sorted.map(labelFor);
+  const wcVals = sorted.map(d => d.wc === null || d.wc === undefined ? null : Number(d.wc.toFixed(2)));
+
+  const wcColor = '#2563EB';
+  const pointRadiusFor = d => isActive(d) ? 6 : 2.5;
+
+  kfiWcChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Working Capital Ratio',
+          data: wcVals,
+          borderColor: wcColor,
+          backgroundColor: 'rgba(37,99,235,0.12)',
+          borderWidth: 2,
+          pointRadius: sorted.map(pointRadiusFor),
+          pointBackgroundColor: wcColor,
+          tension: 0.3,
+          spanGaps: true,
+          fill: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ctx.parsed.y === null ? 'Working Capital: —' : `Working Capital: ${ctx.parsed.y.toFixed(2)}x`
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false },
+          ticks: { maxTicksLimit: 10 }
+        },
+        y: {
+          suggestedMin: 0,
+          title: { display: true, text: 'Working Capital (x)', font: { size: 11 } },
+          ticks: { callback: (val) => `${val}x` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ── Chart: Tren ROA, ROE & ROCE (gantikan kfi-chart-returns Metabase) ──
+   Line chart 3 series HISTORI PENUH (semua tahun) — pola sama dengan
+   renderKfiWcChart di atas: filter "All Years" → histori penuh; filter
+   tahun tertentu → chart di-scope hanya ke 4 kuartal tahun itu; filter
+   kuartal spesifik → titik kuartal itu diperbesar/di-highlight. */
+let kfiReturnsChartInstance = null;
+
+function renderKfiReturnsChart(tahun, kuartal) {
+  const canvas = document.getElementById('kfi-chart-returns-canvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  if (kfiReturnsChartInstance) { kfiReturnsChartInstance.destroy(); kfiReturnsChartInstance = null; }
+  if (!KFI_SERIES_DATA.length) return;
+
+  const activeYear = tahun ? parseInt(tahun) : null;
+
+  let sorted = KFI_SERIES_DATA.slice().sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return KEU_QUARTER_ORDER[a.quarter] - KEU_QUARTER_ORDER[b.quarter];
+  });
+
+  // Scope ke 1 tahun (4 titik kuartal) kalau filter tahun aktif
+  if (activeYear) sorted = sorted.filter(d => d.year === activeYear);
+
+  const isActive = d => !kuartal || d.quarter === kuartal;
+  const labelFor = d => activeYear ? d.quarter : `${d.year} ${d.quarter}`;
+
+  const labels   = sorted.map(labelFor);
+  const roaVals  = sorted.map(d => d.roa  === null || d.roa  === undefined ? null : Number(d.roa.toFixed(2)));
+  const roeVals  = sorted.map(d => d.roe  === null || d.roe  === undefined ? null : Number(d.roe.toFixed(2)));
+  const roceVals = sorted.map(d => d.roce === null || d.roce === undefined ? null : Number(d.roce.toFixed(2)));
+
+  const roaColor  = '#2563EB';
+  const roeColor  = '#16A34A';
+  const roceColor = '#F59E0B';
+
+  const pointRadiusFor = d => isActive(d) ? 6 : 2.5;
+
+  const mkDataset = (label, data, color) => ({
+    label,
+    data,
+    borderColor: color,
+    backgroundColor: color,
+    borderWidth: 2,
+    pointRadius: sorted.map(pointRadiusFor),
+    pointBackgroundColor: color,
+    tension: 0.3,
+    spanGaps: true,
+    fill: false
+  });
+
+  kfiReturnsChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        mkDataset('ROA',  roaVals,  roaColor),
+        mkDataset('ROE',  roeVals,  roeColor),
+        mkDataset('ROCE', roceVals, roceColor)
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'start',
+          labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ctx.parsed.y === null ? `${ctx.dataset.label}: —` : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}%`
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reporting Period', font: { size: 11 } },
+          grid: { display: false },
+          ticks: { maxTicksLimit: 10 }
+        },
+        y: {
+          title: { display: true, text: 'Return (%)', font: { size: 11 } },
+          ticks: { callback: (val) => `${val}%` },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? '#94A3B8' : '#eef1f6',
+            lineWidth: (ctx) => ctx.tick.value === 0 ? 1.5 : 1
+          }
+        }
+      }
+    }
+  });
+}
 
 async function updateKfiKpi() {
   const tahun   = document.getElementById('kfi-yearFilter')?.value;
@@ -2754,18 +4453,9 @@ async function updateKfiKpi() {
     else                   showEl.textContent = 'All Years';
   }
 
-  // ── Update Metabase iframe charts ──
-  // Metabase public URL menerima parameter year & quarter via query string
-  // yang dikonfigurasi sebagai filter di sisi Metabase query.
-  const mbParams = new URLSearchParams();
-  if (tahun)   mbParams.set('year',    tahun);
-  if (kuartal) mbParams.set('quarter', kuartal);
-  const mbQs = mbParams.toString();
-
-  Object.entries(KFI_CHARTS).forEach(([id, baseUrl]) => {
-    const el = document.getElementById(id);
-    if (el) el.src = mbQs ? `${baseUrl}&${mbQs}` : baseUrl;
-  });
+  // ── Seluruh chart page KFI (Trend Working Capital Ratio & Tren ROA/ROE/
+  // ROCE) sudah Chart.js native, jadi tidak ada lagi iframe Metabase untuk
+  // di-update src-nya di sini. ──
 
   try {
     const res  = await fetch(`${API_BASE}/api/kpi/kfi?${params}`);
@@ -2774,6 +4464,9 @@ async function updateKfiKpi() {
   } catch (err) {
     console.warn('KFI KPI fetch error:', err);
   }
+
+  renderKfiWcChart(tahun, kuartal);
+  renderKfiReturnsChart(tahun, kuartal);
 }
 
 // Expose ke window agar bisa dipanggil dari refreshDashboard (yang didefinisikan di IIFE lebih awal)
@@ -2784,6 +4477,9 @@ const _kfiYearElV2 = document.getElementById('kfi-yearFilter');
 if (_kfiYearElV2) _kfiYearElV2.addEventListener('change', updateKfiKpi);
 
 initQuarterBtns('kfi-quarterBtns', 'kfi-quarterFilter', updateKfiKpi);
+
+// Fetch data historis Working Capital Ratio sekali saat aplikasi dibuka
+loadKfiSeriesData();
 
 // ── Load on page switch ke 'kfi' ──
 (function patchSwitchPageForKfi() {
