@@ -38,6 +38,11 @@ DB_CONFIG = {
     "charset": "utf8mb4",
 }
 
+# Database cloud (mis. Aiven) mewajibkan koneksi terenkripsi SSL.
+# SSL otomatis aktif kalau host BUKAN localhost.
+if DB_CONFIG["host"] not in ("127.0.0.1", "localhost"):
+    DB_CONFIG["ssl"] = {"check_hostname": False}
+
 MAIN_TABLE = "indocement"
 
 

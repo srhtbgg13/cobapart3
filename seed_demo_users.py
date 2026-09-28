@@ -26,6 +26,11 @@ DB_CONFIG = {
     "charset": "utf8mb4",
 }
 
+# Database cloud (mis. Aiven) mewajibkan koneksi terenkripsi SSL.
+# SSL otomatis aktif kalau host BUKAN localhost.
+if DB_CONFIG["host"] not in ("127.0.0.1", "localhost"):
+    DB_CONFIG["ssl"] = {"check_hostname": False}
+
 # Ganti username/password di sini sesuai yang mau kamu tampilkan di halaman login demo.
 # role harus salah satu dari: 'admin', 'manajemen', 'user'
 DEMO_USERS = [
